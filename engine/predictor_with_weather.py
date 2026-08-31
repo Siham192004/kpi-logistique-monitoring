@@ -26,6 +26,7 @@ import warnings
 import logging
 import sqlite3
 from pathlib import Path
+import os
 
 import numpy as np
 import pandas as pd
@@ -43,10 +44,9 @@ from sklearn.model_selection import (
     RandomizedSearchCV, StratifiedKFold,
     cross_val_score, train_test_split,
 )
-from sklearn.pipeline import Pipeline 
+from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder
-from imblearn.over_sampling import SMOTE
-from imblearn.pipeline import Pipeline as ImbPipeline
+from engine.weather_client import get_weather_for_prediction
 
 warnings.filterwarnings("ignore")
 logging.basicConfig(level=logging.INFO, format="%(levelname)s | %(message)s")
@@ -65,8 +65,17 @@ FEATURES_NUM = [
     "volume_booked",
     "confirmed_volume",
     "carrier_taux_retard",
+    "route_taux_retard",
     "month_sin",
     "month_cos",
+    "etd_precipitation_mm",
+    "etd_wind_speed_kmh",
+    "etd_temperature_max",
+    "etd_weather_code",
+    "eta_precipitation_mm",
+    "eta_wind_speed_kmh",
+    "eta_temperature_max",
+    "eta_weather_code",
 ]
 
 FEATURES_CAT = [
@@ -120,13 +129,21 @@ def extraire_frequency_num(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def extraire_month_cyclique(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    'July 24' → month_sin / month_cos
-    Encodage cyclique : décembre et janvier sont proches dans l'espace des features.
-    """
+MOIS_FR = {
+    "Janvier": 1, "Février": 2, "Mars": 3, "Avril": 4,
+    "Mai": 5, "Juin": 6, "Juillet": 7, "Août": 8,
+    "Septembre": 9, "Octobre": 10, "Novembre": 11, "Décembre": 12,
+}
+
+def extraire_month_cyclique(df):
     df = df.copy()
-    mois_num = pd.to_datetime(df["month"], format="%B %y", errors="coerce").dt.month
+    # ✅ Support français (format DB) ET anglais (format brut)
+    mois_num = df["month"].astype(str).str.strip().map(MOIS_FR)
+    mask_nan = mois_num.isna()
+    if mask_nan.any():
+        mois_num[mask_nan] = pd.to_datetime(
+            df.loc[mask_nan, "month"], format="%B %y", errors="coerce"
+        ).dt.month
     df["month_sin"] = np.sin(2 * np.pi * mois_num / 12)
     df["month_cos"] = np.cos(2 * np.pi * mois_num / 12)
     return df
@@ -155,6 +172,38 @@ def calculer_taux_retard_carrier(
     return X_train, X_test, taux_par_carrier, taux_global
 
 
+def calculer_taux_retard_route(
+    X_train: pd.DataFrame,
+    X_test: pd.DataFrame,
+    y_train: pd.Series,
+    taux_global: float,
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.Series]:
+    """
+    Taux de retard par route (port_chargement + port_dechargement).
+    Calculé sur train uniquement pour éviter tout data leakage.
+    """
+    taux_par_route = (
+        X_train.assign(is_delayed=y_train.values)
+        .groupby(["port_chargement", "port_dechargement"])["is_delayed"]
+        .mean()
+    )
+    X_train = X_train.copy()
+    X_test  = X_test.copy()
+
+    X_train["route_taux_retard"] = (
+        X_train.set_index(["port_chargement", "port_dechargement"])
+        .index.map(taux_par_route)
+        .fillna(taux_global)
+        .values
+    )
+    X_test["route_taux_retard"] = (
+        X_test.set_index(["port_chargement", "port_dechargement"])
+        .index.map(taux_par_route)
+        .fillna(taux_global)
+        .values
+    )
+    return X_train, X_test, taux_par_route
+
 # ═══════════════════════════════════════════════════════════════════════════
 # PRÉPARATION DES DONNÉES
 # ═══════════════════════════════════════════════════════════════════════════
@@ -180,12 +229,23 @@ def preparer_donnees(
     # Feature engineering
     df_ml = extraire_frequency_num(df_ml)
     df_ml = extraire_month_cyclique(df_ml)
+    
+    print("✅ Météo chargée depuis la base de données.")
 
     y = df_ml["is_delayed"].astype(int)
     features_brutes = [
         "transit_time", "frequency_num", "volume_ratio_allocated_booked",
         "volume_booked", "confirmed_volume",
         "month_sin", "month_cos",
+        # ── Météo ────────────────────────────────────────────────────────────
+        "etd_precipitation_mm",
+        "etd_wind_speed_kmh",
+        "etd_temperature_max",
+        "etd_weather_code",
+        "eta_precipitation_mm",
+        "eta_wind_speed_kmh",
+        "eta_temperature_max",
+        "eta_weather_code",
         "carrier", "port_chargement", "port_dechargement",
         "pays_destination",
     ]
@@ -204,6 +264,11 @@ def preparer_donnees(
         X_train, X_test, y_train
     )
 
+    # Taux retard route (sur train uniquement)
+    X_train, X_test, taux_par_route = calculer_taux_retard_route(
+        X_train, X_test, y_train, taux_global
+    )
+
     print(f"\nDataset ML     : {len(df_ml)} shipments")
     print(f"En retard      : {y.sum()} ({y.mean()*100:.1f}%)")
     print(f"À l'heure      : {(y == 0).sum()} ({(1 - y.mean())*100:.1f}%)")
@@ -211,7 +276,7 @@ def preparer_donnees(
     print(f"Test set       : {len(X_test)} lignes")
     print(f"Features       : {TOUTES_FEATURES}")
 
-    return X_train, X_test, y_train, y_test, taux_par_carrier, taux_global
+    return X_train, X_test, y_train, y_test, taux_par_carrier, taux_par_route, taux_global
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -252,30 +317,24 @@ def construire_pipeline(
         ],
         remainder="drop",
     )
-    pipeline = ImbPipeline(
-    steps=[
-        ("preprocesseur", preprocesseur),
-        ("smote", SMOTE(
-            sampling_strategy=0.4,  # retards → 40% des majoritaires
-            k_neighbors=5,
-            random_state=42,
-        )),
-        (
-            "modele",
-            RandomForestClassifier(
-                n_estimators=n_estimators,
-                max_depth=max_depth,
-                min_samples_leaf=min_samples_leaf,
-                min_samples_split=min_samples_split,
-                max_features=max_features,
-                class_weight="balanced",
-                random_state=42,
-                n_jobs=-1,
+    pipeline = Pipeline(
+        steps=[
+            ("preprocesseur", preprocesseur),
+            (
+                "modele",
+                RandomForestClassifier(
+                    n_estimators=n_estimators,
+                    max_depth=max_depth,
+                    min_samples_leaf=min_samples_leaf,
+                    min_samples_split=min_samples_split,
+                    max_features=max_features,
+                    class_weight="balanced",
+                    random_state=42,
+                    n_jobs=-1,
+                ),
             ),
-        ),
-    ]
-)
-
+        ]
+    )
     return pipeline
 
 
@@ -301,7 +360,6 @@ def tuner_hyperparametres(
         "modele__min_samples_split": randint(2, 20),
         "modele__max_features":      ["sqrt", "log2", 0.3],
     }
-
     cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
     recherche = RandomizedSearchCV(
         estimator=pipeline_base,
@@ -441,6 +499,7 @@ def afficher_importance_features(pipeline: Pipeline, top_n: int = 20) -> pd.Data
 def sauvegarder_modele(
     pipeline: Pipeline,
     taux_par_carrier: pd.Series,
+    taux_par_route: pd.Series,
     taux_global: float,
     seuil_decision: float,
 ) -> None:
@@ -448,6 +507,7 @@ def sauvegarder_modele(
         {
             "pipeline":         pipeline,
             "taux_par_carrier": taux_par_carrier,
+            "taux_par_route":   taux_par_route,
             "taux_global":      taux_global,
             "seuil_decision":   seuil_decision,
         },
@@ -469,7 +529,13 @@ def charger_modele() -> tuple:
         )
     contenu = joblib.load(MODEL_PATH)
     seuil   = contenu.get("seuil_decision", 0.50)
-    return contenu["pipeline"], contenu["taux_par_carrier"], contenu["taux_global"], seuil
+    return (
+            contenu["pipeline"],
+            contenu["taux_par_carrier"],
+            contenu.get("taux_par_route", pd.Series(dtype=float)),
+            contenu["taux_global"],
+            seuil,
+        )
 
 
 def predire_retard(nouveau_shipment: dict) -> dict:
@@ -477,20 +543,37 @@ def predire_retard(nouveau_shipment: dict) -> dict:
     Prédit le retard d'un shipment à partir d'un dictionnaire brut.
     Utilisé par predictor.py et l'API Flask.
     """
-    pipeline, taux_par_carrier, taux_global, seuil_decision = charger_modele()
+    pipeline, taux_par_carrier, taux_par_route, taux_global, seuil_decision = charger_modele()
 
     # ── Reconstruction des features ───────────────────────────────────────
     frequency_str   = str(nouveau_shipment.get("frequency", ""))
     frequency_match = pd.Series([frequency_str]).str.extract(r"(\d+)").iloc[0, 0]
     frequency_num   = float(frequency_match) if pd.notna(frequency_match) else np.nan
 
-    mois_texte = nouveau_shipment.get("month")
-    mois_num   = pd.to_datetime(pd.Series([mois_texte]), format="%B %y", errors="coerce").dt.month.iloc[0]
-    month_sin  = float(np.sin(2 * np.pi * mois_num / 12)) if pd.notna(mois_num) else np.nan
-    month_cos  = float(np.cos(2 * np.pi * mois_num / 12)) if pd.notna(mois_num) else np.nan
-
+    # ── CORRECTION : parsing mois français ET anglais ─────────────────────
+    mois_texte  = str(nouveau_shipment.get("month", "")).strip()
+    mois_num_val = MOIS_FR.get(mois_texte.split()[0])   # "Septembre" → 9
+    if mois_num_val is None:
+            # Fallback anglais : "September 24" → 9
+            mois_num_val = pd.to_datetime(
+                pd.Series([mois_texte]), format="%B %y", errors="coerce"
+            ).dt.month.iloc[0]
+    
+    if pd.notna(mois_num_val):
+            month_sin = float(np.sin(2 * np.pi * mois_num_val / 12))
+            month_cos = float(np.cos(2 * np.pi * mois_num_val / 12))
+    else:
+            month_sin = np.nan
+            month_cos = np.nan
     carrier      = nouveau_shipment.get("carrier", "") or ""
     carrier_taux = float(taux_par_carrier.get(carrier, taux_global))
+
+    pol = nouveau_shipment.get("port_chargement", "")
+    pod = nouveau_shipment.get("port_dechargement", "")
+    route_taux = float(
+       taux_par_route.get((pol, pod), taux_global)
+       if (pol, pod) in taux_par_route.index else taux_global
+    )
 
     # volume_ratio si non fourni directement
     vol_booked    = float(nouveau_shipment.get("volume_booked") or 0)
@@ -500,6 +583,13 @@ def predire_retard(nouveau_shipment: dict) -> dict:
         or (vol_confirmed / vol_booked if vol_booked > 0 else np.nan)
     )
 
+    meteo = get_weather_for_prediction(
+            port_chargement=pol,
+            port_dechargement=pod,
+            etd=str(nouveau_shipment.get("etd", "")),
+            eta=str(nouveau_shipment.get("eta", "")),
+    )
+
     X_nouveau = pd.DataFrame([{
         "transit_time":                  nouveau_shipment.get("transit_time", np.nan),
         "frequency_num":                 frequency_num,
@@ -507,12 +597,22 @@ def predire_retard(nouveau_shipment: dict) -> dict:
         "volume_booked":                 vol_booked or np.nan,
         "confirmed_volume":              vol_confirmed or np.nan,
         "carrier_taux_retard":           carrier_taux,
+        "route_taux_retard":             route_taux,
         "month_sin":                     month_sin,
         "month_cos":                     month_cos,
         "carrier":                       carrier,
         "port_chargement":               nouveau_shipment.get("port_chargement") or np.nan,
         "port_dechargement":             nouveau_shipment.get("port_dechargement") or np.nan,
         "pays_destination":              nouveau_shipment.get("pays_destination") or np.nan,
+        # météo
+        "etd_precipitation_mm": meteo.get("etd_precipitation_mm", np.nan),
+        "etd_wind_speed_kmh":   meteo.get("etd_wind_speed_kmh",   np.nan),
+        "etd_temperature_max":  meteo.get("etd_temperature_max",  np.nan),
+        "etd_weather_code":     meteo.get("etd_weather_code",     np.nan),
+        "eta_precipitation_mm": meteo.get("eta_precipitation_mm", np.nan),
+        "eta_wind_speed_kmh":   meteo.get("eta_wind_speed_kmh",   np.nan),
+        "eta_temperature_max":  meteo.get("eta_temperature_max",  np.nan),
+        "eta_weather_code":     meteo.get("eta_weather_code",     np.nan),
     }])
 
     probabilite = float(pipeline.predict_proba(X_nouveau)[0][1])
@@ -531,6 +631,7 @@ def predire_retard(nouveau_shipment: dict) -> dict:
         "niveau_risque":      niveau_risque,
         "label":              "En retard" if prediction == 1 else "À l'heure",
         "seuil_utilise":      round(seuil_decision, 3),
+        "meteo":              meteo,   # ✅ AJOUTER
     }
 
 
@@ -546,7 +647,7 @@ if __name__ == "__main__":
 
     # 1. Chargement et préparation
     df_raw = get_all_shipments()
-    X_train, X_test, y_train, y_test, taux_par_carrier, taux_global = preparer_donnees(df_raw)
+    X_train, X_test, y_train, y_test, taux_par_carrier, taux_par_route, taux_global = preparer_donnees(df_raw)
 
     # 2. Tuning hyperparamètres (60 itérations)
     pipeline, best_params, best_cv_score = tuner_hyperparametres(X_train, y_train, n_iter=60)
@@ -561,7 +662,7 @@ if __name__ == "__main__":
     afficher_importance_features(pipeline, top_n=20)
 
     # 6. Sauvegarde
-    sauvegarder_modele(pipeline, taux_par_carrier, taux_global, seuil_optimal)
+    sauvegarder_modele(pipeline, taux_par_carrier, taux_par_route, taux_global, seuil_optimal)
 
     print("\n" + "=" * 60)
     print(f"  RÉSUMÉ FINAL")
@@ -574,10 +675,12 @@ if __name__ == "__main__":
 
     print("\n=== TEST DE PREDICTION SUR UN EXEMPLE ===")
     exemple = {
-        'transit_time': 10, 'frequency': '7j', 'month': 'September 25',
-        'volume_booked': 1000, 'confirmed_volume': 950,
-        'carrier': 'Grimaldi Lines', 'port_chargement': 'Tanger Med',
-        'port_dechargement': 'Civitavecchia', 'pays_destination': 'Italy',
+        "transit_time": 10, "frequency": "7j", "month": "September 25",
+        "volume_booked": 1000, "confirmed_volume": 950,
+        "carrier": "Grimaldi Lines", "port_chargement": "Tanger Med",
+        "port_dechargement": "Civitavecchia", "pays_destination": "Italy",
+        "etd": "2025-09-15", "eta": "2025-09-25",
     }
     resultat = predire_retard(exemple)
     print(f"Shipment test -> {resultat['label']} (probabilite : {resultat['probabilite_retard']}%, risque : {resultat['niveau_risque']})")
+

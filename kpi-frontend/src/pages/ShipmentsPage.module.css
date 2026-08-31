@@ -1,0 +1,284 @@
+.content { padding: 20px 28px; }
+
+.searchWrap { position: relative; }
+.searchIcon {
+  position: absolute;
+  left: 9px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--color-text-tertiary);
+  pointer-events: none;
+}
+.searchInput {
+  width: 200px;
+  height: 32px;
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text-primary);
+  font-family: inherit;
+  font-size: 12px;
+  padding: 0 10px 0 28px;
+  outline: none;
+  transition: border-color var(--transition-fast);
+}
+.searchInput:focus { border-color: var(--color-accent); }
+.searchInput::placeholder { color: var(--color-text-tertiary); }
+
+.iconBtn {
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+.iconBtn:hover {
+  background: var(--color-surface-2);
+  border-color: var(--color-border);
+  color: var(--color-text-secondary);
+}
+.iconBtn.danger:hover { background: var(--color-danger-dim); color: var(--color-danger); border-color: rgba(239,68,68,0.2); }
+
+.formGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+@media (max-width: 600px) { .formGrid { grid-template-columns: 1fr; } }
+
+.detailGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+  background: var(--color-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.detailItem {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px 14px;
+  background: var(--color-surface);
+}
+
+.detailLabel {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-tertiary);
+}
+
+.detailValue {
+  font-size: 13px;
+  color: var(--color-text-primary);
+  font-weight: 450;
+}
+
+/* ── Field wrapper avec erreur ── */
+.fieldWrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.fieldError {
+  font-size: 11px;
+  color: var(--color-danger);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.fieldHint {
+  font-size: 10px;
+  color: var(--color-text-tertiary);
+  margin-top: 2px;
+}
+
+/* ── Carrier Combobox ── */
+.comboWrap {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.comboLabel {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.comboBox {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.comboInput {
+  width: 100%;
+  height: 36px;
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text-primary);
+  font-family: inherit;
+  font-size: 13px;
+  padding: 0 32px 0 12px;
+  outline: none;
+  transition: border-color var(--transition-fast);
+}
+.comboInput:focus { border-color: var(--color-accent); }
+.comboInput::placeholder { color: var(--color-text-tertiary); }
+
+.comboBoxOpen .comboInput { border-color: var(--color-accent); }
+
+.comboChevron {
+  position: absolute;
+  right: 10px;
+  color: var(--color-text-tertiary);
+  pointer-events: none;
+}
+
+.comboDropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+  z-index: 100;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.comboOption {
+  padding: 9px 12px;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: background 0.1s ease;
+}
+.comboOption:hover { background: var(--color-surface-2); color: var(--color-text-primary); }
+.comboOptionActive { background: var(--color-accent-dim); color: var(--color-accent); }
+
+.comboAdd {
+  padding: 9px 12px;
+  font-size: 13px;
+  color: var(--color-accent);
+  cursor: pointer;
+  border-top: 1px solid var(--color-border);
+  font-weight: 500;
+  transition: background 0.1s ease;
+}
+.comboAdd:hover { background: var(--color-accent-dim); }
+
+.comboEmpty {
+  padding: 12px;
+  font-size: 12px;
+  color: var(--color-text-tertiary);
+  text-align: center;
+}
+
+.detailSectionHeader {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-accent);
+  background: var(--color-accent-dim);
+  padding: 6px 14px;
+}
+
+.detailDivider {
+  height: 2px;
+  background: var(--color-border);
+  padding: 0;
+}
+
+.detailNote {
+  margin: 12px 0 0 0;
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+  font-style: italic;
+  border-top: 1px solid var(--color-border);
+  padding-top: 10px;
+}
+
+/* ── Onglets ── */
+.tabs {
+  display: flex;
+  gap: 4px;
+  padding: 10px 28px;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+  overflow-x: auto;
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 14px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  font-family: inherit;
+  white-space: nowrap;
+  transition: all var(--transition-fast);
+}
+
+.tab:hover:not(.activeTab) {
+  background: var(--color-surface-2);
+  color: var(--color-text-primary);
+}
+
+.activeTab {
+  background: var(--color-accent-dim);
+  border-color: rgba(59,130,246,0.3);
+  color: var(--color-accent);
+}
+
+.tabCount {
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: 99px;
+  padding: 0 6px;
+  font-size: 10px;
+  color: var(--color-text-tertiary);
+  font-weight: 600;
+}
+@media (max-width: 768px) {
+  .content { padding: 12px 16px; }
+  .tabs { padding: 8px 16px; }
+  .searchInput { width: 100%; }
+}
+
+@media (max-width: 480px) {
+  .content { padding: 10px 12px; }
+  .detailGrid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 768px) {
+  .searchInput {
+    width: 100%;
+  }
+}

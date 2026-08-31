@@ -6,3 +6,12 @@ __pycache__/
 .env
 Thumbs.db
 desktop.ini
+kpi-frontend/node_modules/
+catboost_info/
+kpi-frontend/dist/
+.vscode/
+data/*.xlsx
+data/*.xls
+*.db
+*.sqlite
+*.sqlite3

@@ -1,0 +1,238 @@
+.tabs {
+  display: flex;
+  gap: 2px;
+  padding: 12px 28px;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+  overflow-x: auto;
+}
+
+.tab {
+  height: 30px;
+  padding: 0 14px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  font-family: inherit;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.tab:hover:not(.activeTab) {
+  background: var(--color-surface-2);
+  color: var(--color-text-primary);
+}
+
+.activeTab {
+  background: var(--color-accent-dim);
+  color: var(--color-accent);
+  border-color: rgba(59,130,246,0.2);
+}
+
+.content {
+  padding: 24px 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+
+.tabTitle {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.chartCard {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 18px;
+  transition: border-color var(--transition-base);
+}
+.chartCard:hover { border-color: var(--color-border-hover); }
+
+.chartHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chartTitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.groupBtns { display: flex; gap: 4px; flex-wrap: wrap; }
+
+.groupBtn {
+  height: 26px;
+  padding: 0 10px;
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  font-size: 11px;
+  font-family: inherit;
+  transition: all var(--transition-fast);
+}
+.groupBtn:hover { background: var(--color-surface-2); color: var(--color-text-primary); }
+.activeGroup {
+  background: var(--color-accent-dim);
+  border-color: rgba(59,130,246,0.3);
+  color: var(--color-accent);
+}
+
+.tooltip {
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
+  box-shadow: var(--shadow-lg);
+  font-size: 12px;
+}
+.tooltipLabel {
+  color: var(--color-text-secondary);
+  margin-bottom: 4px;
+  font-weight: 500;
+}
+
+/* KPI3 stats */
+.statRow {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.statCard {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 14px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+  min-width: 120px;
+}
+
+.statValue {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  letter-spacing: -0.02em;
+}
+
+.statLabel {
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+}
+
+/* Row layout */
+.row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+@media (max-width: 800px) { .row { grid-template-columns: 1fr; } }
+
+/* KPI4/5 stats */
+.kpi4Stats {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 32px;
+  height: 180px;
+}
+
+.bigStat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.bigStatVal {
+  font-size: 40px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: var(--color-text-primary);
+}
+
+.bigStatLabel {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.divider {
+  width: 1px;
+  height: 60px;
+  background: var(--color-border);
+}
+
+/* ── Sélecteur année ── */
+.tabHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.yearSelector {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.yearLabel {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-text-tertiary);
+  white-space: nowrap;
+}
+
+.yearSelect {
+  height: 28px;
+  padding: 0 28px 0 10px;
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-primary);
+  font-size: 12px;
+  font-weight: 500;
+  font-family: 'JetBrains Mono', monospace;
+  cursor: pointer;
+  outline: none;
+  appearance: none;
+  transition: border-color var(--transition-fast);
+}
+
+.yearSelect:focus {
+  border-color: var(--color-accent);
+}
+@media (max-width: 768px) {
+  .content { padding: 16px; }
+  .tabs { padding: 10px 16px; }
+  .kpi4Stats { gap: 16px; flex-wrap: wrap; height: auto; padding: 16px 0; }
+  .bigStatVal { font-size: 32px; }
+  .statRow { gap: 8px; }
+}
+
+@media (max-width: 480px) {
+  .content { padding: 12px; }
+  .kpi4Stats { flex-direction: column; align-items: flex-start; gap: 12px; }
+  .divider { display: none; }
+}

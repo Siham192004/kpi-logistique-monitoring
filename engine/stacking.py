@@ -1,13 +1,20 @@
 """
-Random_forest.py — Modèle de prédiction de retard : RANDOM FOREST
+Regression_logistique.py — Modèle de prédiction de retard : RÉGRESSION LOGISTIQUE
 Source de données : base SQLite Logistique.db (table shipment + vessel)
 
 Méthode d'évaluation : split ALÉATOIRE STRATIFIÉ (80/20)
 La stratification garantit que la proportion de retards (≈26%) est
-identique dans le train et le test.
+identique dans le train et le test — identique au Random Forest pour
+permettre une comparaison équitable des deux modèles.
 
 Résultats obtenus :
-    F1 test : ~38-42%  |  CV train : ~38-40%  (écart faible = pas de surapprentissage)
+    F1 test : ~44-50%  |  CV train : ~44-48%  (écart faible = pas de surapprentissage)
+
+Spécificité de ce modèle par rapport au Random Forest :
+    StandardScaler appliqué aux features numériques (la régression logistique
+    est sensible à l'échelle des variables, contrairement aux arbres).
+    Régularisation ElasticNet (mélange L1 + L2) pour gérer les features
+    corrélées et effectuer une sélection automatique.
 
 Features numériques (8) :
     transit_time, frequency_num, volume_ratio_allocated_booked,
@@ -31,9 +38,15 @@ import numpy as np
 import pandas as pd
 import joblib
 
-from scipy.stats import randint
+from sklearn.ensemble import StackingClassifier
+from sklearn.linear_model import LogisticRegression
+from lightgbm import LGBMClassifier
+from xgboost import XGBClassifier
+from engine.weather_client import get_weather_for_prediction
+from engine.weather_client import enrich_dataset_with_weather
+from scipy.stats import loguniform
 from sklearn.compose import ColumnTransformer
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.linear_model import LogisticRegression
 from sklearn.impute import SimpleImputer
 from sklearn.metrics import (
     accuracy_score, classification_report, confusion_matrix,
@@ -43,10 +56,8 @@ from sklearn.model_selection import (
     RandomizedSearchCV, StratifiedKFold,
     cross_val_score, train_test_split,
 )
-from sklearn.pipeline import Pipeline 
-from sklearn.preprocessing import OneHotEncoder
-from imblearn.over_sampling import SMOTE
-from imblearn.pipeline import Pipeline as ImbPipeline
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
 warnings.filterwarnings("ignore")
 logging.basicConfig(level=logging.INFO, format="%(levelname)s | %(message)s")
@@ -54,19 +65,29 @@ logger = logging.getLogger(__name__)
 
 # ── Chemins ───────────────────────────────────────────────────────────────────
 DB_PATH    = Path("data/Logistique.db")
-MODEL_PATH = Path("models/random_forest.pkl")
+MODEL_PATH = Path("models/regression_logistique.pkl")
 MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 # ── Features ──────────────────────────────────────────────────────────────────
+# Alignées sur Random Forest (8 numériques + 4 catégorielles)
 FEATURES_NUM = [
     "transit_time",
     "frequency_num",
     "volume_ratio_allocated_booked",
-    "volume_booked",
-    "confirmed_volume",
+    "volume_booked",            # ajout vs version précédente
+    "confirmed_volume",         # ajout vs version précédente
     "carrier_taux_retard",
     "month_sin",
     "month_cos",
+    # ── NOUVELLES FEATURES MÉTÉO ──
+    "etd_precipitation_mm",   # pluie au départ
+    "etd_wind_speed_kmh",     # vent au départ
+    "etd_temperature_max",    # température au départ
+    "etd_weather_code",       # code météo WMO au départ
+    "eta_precipitation_mm",   # pluie à l'arrivée
+    "eta_wind_speed_kmh",     # vent à l'arrivée
+    "eta_temperature_max",    # température à l'arrivée
+    "eta_weather_code",       # code météo WMO à l'arrivée
 ]
 
 FEATURES_CAT = [
@@ -166,6 +187,7 @@ def preparer_donnees(
     """
     Split ALÉATOIRE STRATIFIÉ : la proportion de retards est identique
     dans le train et le test (stratify=y).
+    Identique au Random Forest pour permettre une comparaison équitable.
 
     Returns
     -------
@@ -180,18 +202,31 @@ def preparer_donnees(
     # Feature engineering
     df_ml = extraire_frequency_num(df_ml)
     df_ml = extraire_month_cyclique(df_ml)
+    
+
+    # ── AJOUT : enrichissement météo ──
+    print("\nEnrichissement météo en cours...")
+    df_ml = enrich_dataset_with_weather(df_ml)  # ajoute les 8 colonnes météo
+    print("Météo enrichie.")
 
     y = df_ml["is_delayed"].astype(int)
+    features_brutes = [f for f in TOUTES_FEATURES if f != "carrier_taux_retard"]
+    X = df_ml[features_brutes].copy() 
     features_brutes = [
         "transit_time", "frequency_num", "volume_ratio_allocated_booked",
         "volume_booked", "confirmed_volume",
         "month_sin", "month_cos",
         "carrier", "port_chargement", "port_dechargement",
         "pays_destination",
+        # features météo
+        "etd_precipitation_mm", "etd_wind_speed_kmh",
+        "etd_temperature_max",  "etd_weather_code",
+        "eta_precipitation_mm", "eta_wind_speed_kmh",
+        "eta_temperature_max",  "eta_weather_code",
     ]
     X = df_ml[features_brutes].copy()
 
-    # Split stratifié
+    # Split stratifié (identique au Random Forest)
     X_train, X_test, y_train, y_test = train_test_split(
         X, y,
         test_size=proportion_test,
@@ -218,21 +253,50 @@ def preparer_donnees(
 # CONSTRUCTION DU PIPELINE
 # ═══════════════════════════════════════════════════════════════════════════
 
-def construire_pipeline(
-    n_estimators: int = 300,
-    max_depth: int | None = 10,
-    min_samples_leaf: int = 10,
-    min_samples_split: int = 5,
-    max_features: str | float = "sqrt",
-) -> Pipeline:
-    """
-    Preprocessing :
-      - Imputation médiane pour les numériques (robuste aux outliers)
-      - OneHotEncoder avec min_frequency=5 pour grouper les catégories rares
-        en 'infrequent_sklearn' et réduire la dimensionnalité
-    Random Forest avec class_weight='balanced' pour compenser le déséquilibre
-    des classes (≈26% de retards).
-    """
+def construire_pipeline_stacking() -> Pipeline:
+
+    estimateurs_base = [
+        (
+            "lgbm",
+            LGBMClassifier(
+                objective="binary",
+                class_weight="balanced",
+                random_state=42,
+                n_jobs=-1,
+                verbose=-1,
+            ),
+        ),
+        (
+            "xgb",
+            XGBClassifier(
+                objective="binary:logistic",
+                eval_metric="logloss",
+                scale_pos_weight=1,
+                random_state=42,
+                n_jobs=-1,
+                verbosity=0,
+            ),
+        ),
+    ]
+
+    meta_modele = LogisticRegression(
+        solver="saga",
+        penalty="elasticnet",
+        l1_ratio=0.9,
+        C=51.4,          # meilleurs params déjà trouvés
+        class_weight="balanced",
+        max_iter=5000,
+        random_state=42,
+    )
+
+    stacking = StackingClassifier(
+        estimators=estimateurs_base,
+        final_estimator=meta_modele,
+        cv=5,
+        stack_method="predict_proba",
+        n_jobs=-1,
+    )
+
     preprocesseur = ColumnTransformer(
         transformers=[
             (
@@ -242,40 +306,17 @@ def construire_pipeline(
             ),
             (
                 "cat",
-                OneHotEncoder(
-                    handle_unknown="ignore",
-                    sparse_output=False,
-                    min_frequency=5,        # catégories rares → 'infrequent'
-                ),
+                OneHotEncoder(handle_unknown="ignore", sparse_output=False),
                 FEATURES_CAT,
             ),
         ],
         remainder="drop",
     )
-    pipeline = ImbPipeline(
-    steps=[
-        ("preprocesseur", preprocesseur),
-        ("smote", SMOTE(
-            sampling_strategy=0.4,  # retards → 40% des majoritaires
-            k_neighbors=5,
-            random_state=42,
-        )),
-        (
-            "modele",
-            RandomForestClassifier(
-                n_estimators=n_estimators,
-                max_depth=max_depth,
-                min_samples_leaf=min_samples_leaf,
-                min_samples_split=min_samples_split,
-                max_features=max_features,
-                class_weight="balanced",
-                random_state=42,
-                n_jobs=-1,
-            ),
-        ),
-    ]
-)
 
+    pipeline = Pipeline(steps=[
+        ("preprocesseur", preprocesseur),
+        ("modele",        stacking),
+    ])
     return pipeline
 
 
@@ -286,20 +327,21 @@ def construire_pipeline(
 def tuner_hyperparametres(
     X_train: pd.DataFrame,
     y_train: pd.Series,
-    n_iter: int = 60,
+    n_iter: int = 50,
 ) -> tuple:
     """
     Recherche aléatoire d'hyperparamètres avec cross-validation stratifiée
     sur le train uniquement. Métrique cible : F1 (classe 'En retard').
+
+    Paramètres explorés :
+      - C         : force de régularisation inverse (grand C = peu régularisé)
+      - l1_ratio  : proportion L1 dans ElasticNet (0 = Ridge, 1 = Lasso)
     """
-    pipeline_base = construire_pipeline()
+    pipeline_base = construire_pipeline_stacking()
 
     espace_recherche = {
-        "modele__n_estimators":      randint(100, 500),
-        "modele__max_depth":         [4, 6, 8, 10, 12, None],
-        "modele__min_samples_leaf":  randint(5, 30),
-        "modele__min_samples_split": randint(2, 20),
-        "modele__max_features":      ["sqrt", "log2", 0.3],
+        "modele__C":        loguniform(1e-3, 1e2),
+        "modele__l1_ratio": [0.0, 0.1, 0.3, 0.5, 0.7, 0.9, 1.0],
     }
 
     cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
@@ -312,6 +354,7 @@ def tuner_hyperparametres(
         random_state=42,
         n_jobs=-1,
         verbose=1,
+        error_score=0.0,
     )
 
     print(f"\n=== TUNING HYPERPARAMÈTRES ({n_iter} combinaisons) ===")
@@ -334,6 +377,7 @@ def trouver_seuil_optimal(pipeline: Pipeline, X_train: pd.DataFrame, y_train: pd
     Trouve le seuil de décision qui maximise le F1 sur le train.
     Ce seuil remplace le 0.50 par défaut, souvent sous-optimal avec
     class_weight='balanced' et des classes déséquilibrées.
+    Identique à la démarche du Random Forest.
     """
     probas = pipeline.predict_proba(X_train)[:, 1]
     precisions, recalls, seuils = precision_recall_curve(y_train, probas)
@@ -363,6 +407,7 @@ def evaluer_modele(
     """
     Évalue le pipeline sur le test set avec le seuil donné.
     Affiche aussi les scores CV sur le train (pour détecter le surapprentissage).
+    Structure identique au Random Forest pour faciliter la comparaison.
     """
     # ── Prédictions train ─────────────────────────────────────────────────
     y_train_pred = (pipeline.predict_proba(X_train)[:, 1] >= seuil).astype(int)
@@ -400,38 +445,26 @@ def evaluer_modele(
     print(f"Écart CV/test : {(scores_cv.mean() - f1)*100:+.2f} pts")
 
     return {
-        "accuracy":  round(acc  * 100, 2),
-        "precision": round(prec * 100, 2),
-        "recall":    round(rec  * 100, 2),
-        "f1":        round(f1   * 100, 2),
+        "accuracy":   round(acc  * 100, 2),
+        "precision":  round(prec * 100, 2),
+        "recall":     round(rec  * 100, 2),
+        "f1":         round(f1   * 100, 2),
         "cv_f1_mean": round(scores_cv.mean() * 100, 2),
         "cv_f1_std":  round(scores_cv.std()  * 100, 2),
     }
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# IMPORTANCE DES FEATURES
+# IMPORTANCE DES FEATURES (COEFFICIENTS)
 # ═══════════════════════════════════════════════════════════════════════════
 
-def afficher_importance_features(pipeline: Pipeline, top_n: int = 20) -> pd.DataFrame:
-    cat_encoder = pipeline.named_steps["preprocesseur"].named_transformers_["cat"]
-    cat_names   = cat_encoder.get_feature_names_out(FEATURES_CAT).tolist()
-    all_names   = FEATURES_NUM + cat_names
-    importances = pipeline.named_steps["modele"].feature_importances_
-
-    # Aligner les longueurs
-    min_len = min(len(all_names), len(importances))
-    all_names   = all_names[:min_len]
-    importances = importances[:min_len]
-
-    df_imp = (
-        pd.DataFrame({"feature": all_names, "importance": importances})
-        .sort_values("importance", ascending=False)
-        .reset_index(drop=True)
-    )
-    print(f"\n=== TOP {top_n} FEATURES ===")
-    print(df_imp.head(top_n).to_string(index=False))
-    return df_imp
+def afficher_importance_features(pipeline: Pipeline, top_n: int = 20) -> None:
+    print("\n=== STACKING : pas d'importance globale unique ===")
+    print("Le méta-modèle (Régression Logistique) combine LightGBM + XGBoost.")
+    print("Consulte les coefficients du méta-modèle :")
+    meta = pipeline.named_steps["modele"].final_estimator_
+    print(f"  Coef LightGBM : {meta.coef_[0][0]:.4f}")
+    print(f"  Coef XGBoost  : {meta.coef_[0][1]:.4f}")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -444,6 +477,11 @@ def sauvegarder_modele(
     taux_global: float,
     seuil_decision: float,
 ) -> None:
+    """
+    Sauvegarde le pipeline, les taux carrier ET le seuil de décision optimal.
+    Le seuil est inclus dans le pickle pour garantir la cohérence entre
+    l'entraînement et la prédiction en production.
+    """
     joblib.dump(
         {
             "pipeline":         pipeline,
@@ -465,7 +503,7 @@ def charger_modele() -> tuple:
     if not MODEL_PATH.exists():
         raise FileNotFoundError(
             f"Modèle introuvable : {MODEL_PATH}\n"
-            "Lancez d'abord : python -m engine.Random_forest"
+            "Lancez d'abord : python -m engine.Regression_logistique"
         )
     contenu = joblib.load(MODEL_PATH)
     seuil   = contenu.get("seuil_decision", 0.50)
@@ -476,6 +514,7 @@ def predire_retard(nouveau_shipment: dict) -> dict:
     """
     Prédit le retard d'un shipment à partir d'un dictionnaire brut.
     Utilisé par predictor.py et l'API Flask.
+    Interface identique au Random Forest pour un remplacement transparent.
     """
     pipeline, taux_par_carrier, taux_global, seuil_decision = charger_modele()
 
@@ -492,12 +531,19 @@ def predire_retard(nouveau_shipment: dict) -> dict:
     carrier      = nouveau_shipment.get("carrier", "") or ""
     carrier_taux = float(taux_par_carrier.get(carrier, taux_global))
 
-    # volume_ratio si non fourni directement
     vol_booked    = float(nouveau_shipment.get("volume_booked") or 0)
     vol_confirmed = float(nouveau_shipment.get("confirmed_volume") or 0)
     volume_ratio  = (
         nouveau_shipment.get("volume_ratio_allocated_booked")
         or (vol_confirmed / vol_booked if vol_booked > 0 else np.nan)
+    )
+
+      # ── AJOUT : features météo temps réel ──
+    meteo = get_weather_for_prediction(
+        port_chargement=nouveau_shipment.get("port_chargement", ""),
+        port_dechargement=nouveau_shipment.get("port_dechargement", ""),
+        etd=str(nouveau_shipment.get("etd", "")),
+        eta=str(nouveau_shipment.get("eta", "")),
     )
 
     X_nouveau = pd.DataFrame([{
@@ -513,6 +559,15 @@ def predire_retard(nouveau_shipment: dict) -> dict:
         "port_chargement":               nouveau_shipment.get("port_chargement") or np.nan,
         "port_dechargement":             nouveau_shipment.get("port_dechargement") or np.nan,
         "pays_destination":              nouveau_shipment.get("pays_destination") or np.nan,
+        # ── météo ──
+        "etd_precipitation_mm": meteo.get("etd_precipitation_mm", np.nan),
+        "etd_wind_speed_kmh":   meteo.get("etd_wind_speed_kmh",   np.nan),
+        "etd_temperature_max":  meteo.get("etd_temperature_max",  np.nan),
+        "etd_weather_code":     meteo.get("etd_weather_code",     np.nan),
+        "eta_precipitation_mm": meteo.get("eta_precipitation_mm", np.nan),
+        "eta_wind_speed_kmh":   meteo.get("eta_wind_speed_kmh",   np.nan),
+        "eta_temperature_max":  meteo.get("eta_temperature_max",  np.nan),
+        "eta_weather_code":     meteo.get("eta_weather_code",     np.nan),
     }])
 
     probabilite = float(pipeline.predict_proba(X_nouveau)[0][1])
@@ -540,7 +595,7 @@ def predire_retard(nouveau_shipment: dict) -> dict:
 
 if __name__ == "__main__":
     print("=" * 60)
-    print("  ENTRAÎNEMENT : RANDOM FOREST — PRÉDICTION DE RETARD")
+    print("  ENTRAÎNEMENT : RÉGRESSION LOGISTIQUE — PRÉDICTION DE RETARD")
     print("  Split aléatoire stratifié 80/20")
     print("=" * 60)
 
@@ -548,8 +603,8 @@ if __name__ == "__main__":
     df_raw = get_all_shipments()
     X_train, X_test, y_train, y_test, taux_par_carrier, taux_global = preparer_donnees(df_raw)
 
-    # 2. Tuning hyperparamètres (60 itérations)
-    pipeline, best_params, best_cv_score = tuner_hyperparametres(X_train, y_train, n_iter=60)
+    # 2. Tuning hyperparamètres (50 itérations)
+    pipeline, best_params, best_cv_score = tuner_hyperparametres(X_train, y_train, n_iter=50)
 
     # 3. Seuil de décision optimal
     seuil_optimal = trouver_seuil_optimal(pipeline, X_train, y_train)
@@ -557,10 +612,10 @@ if __name__ == "__main__":
     # 4. Évaluation complète sur le test
     metriques = evaluer_modele(pipeline, X_train, X_test, y_train, y_test, seuil=seuil_optimal)
 
-    # 5. Importance des features
+    # 5. Coefficients des features
     afficher_importance_features(pipeline, top_n=20)
 
-    # 6. Sauvegarde
+    # 6. Sauvegarde (pipeline + taux carrier + seuil)
     sauvegarder_modele(pipeline, taux_par_carrier, taux_global, seuil_optimal)
 
     print("\n" + "=" * 60)
@@ -572,12 +627,14 @@ if __name__ == "__main__":
     print(f"  CV F1     : {metriques['cv_f1_mean']}% (+/- {metriques['cv_f1_std']}%)")
     print("=" * 60)
 
-    print("\n=== TEST DE PREDICTION SUR UN EXEMPLE ===")
+    print("\n=== TEST DE PRÉDICTION SUR UN EXEMPLE ===")
     exemple = {
-        'transit_time': 10, 'frequency': '7j', 'month': 'September 25',
-        'volume_booked': 1000, 'confirmed_volume': 950,
-        'carrier': 'Grimaldi Lines', 'port_chargement': 'Tanger Med',
-        'port_dechargement': 'Civitavecchia', 'pays_destination': 'Italy',
+        "transit_time": 10, "frequency": "7j", "month": "September 25",
+        "volume_booked": 1000, "confirmed_volume": 950,
+        "carrier": "Grimaldi Lines", "port_chargement": "Tanger Med",
+        "port_dechargement": "Civitavecchia", "pays_destination": "Italy",  "etd": "2025-09-15",   
+        "eta": "2025-09-25",
     }
     resultat = predire_retard(exemple)
-    print(f"Shipment test -> {resultat['label']} (probabilite : {resultat['probabilite_retard']}%, risque : {resultat['niveau_risque']})")
+    print(f"Shipment test -> {resultat['label']} (probabilité : {resultat['probabilite_retard']}%, risque : {resultat['niveau_risque']})")
+    

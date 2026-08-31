@@ -26,6 +26,7 @@ import warnings
 import logging
 import sqlite3
 from pathlib import Path
+import os
 
 import numpy as np
 import pandas as pd
@@ -43,10 +44,10 @@ from sklearn.model_selection import (
     RandomizedSearchCV, StratifiedKFold,
     cross_val_score, train_test_split,
 )
-from sklearn.pipeline import Pipeline 
+from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder
-from imblearn.over_sampling import SMOTE
-from imblearn.pipeline import Pipeline as ImbPipeline
+from engine.weather_client import get_weather_for_prediction, enrich_dataset_with_weather
+
 
 warnings.filterwarnings("ignore")
 logging.basicConfig(level=logging.INFO, format="%(levelname)s | %(message)s")
@@ -67,6 +68,8 @@ FEATURES_NUM = [
     "carrier_taux_retard",
     "month_sin",
     "month_cos",
+    "etd_wind_speed_kmh",
+    "eta_temperature_max", 
 ]
 
 FEATURES_CAT = [
@@ -164,12 +167,10 @@ def preparer_donnees(
     proportion_test: float = 0.2,
 ) -> tuple:
     """
-    Split ALÉATOIRE STRATIFIÉ : la proportion de retards est identique
-    dans le train et le test (stratify=y).
-
-    Returns
-    -------
-    X_train, X_test, y_train, y_test, taux_par_carrier, taux_global
+    
+      Split CHRONOLOGIQUE.
+      Les 80 % des expéditions les plus anciennes sont utilisés pour
+      l'entraînement et les 20 % les plus récentes pour le test.
     """
     if df is None:
         df = get_all_shipments()
@@ -181,24 +182,44 @@ def preparer_donnees(
     df_ml = extraire_frequency_num(df_ml)
     df_ml = extraire_month_cyclique(df_ml)
 
+    PARQUET_PATH = Path("data/dataset_with_weather.parquet")
+
+    if PARQUET_PATH.exists():
+    # Déjà enrichi → charger directement
+       df_ml = pd.read_parquet(PARQUET_PATH)
+       print("✓ Dataset météo chargé depuis le cache parquet")
+    else:
+    # Première fois → appels API + sauvegarde
+       df_ml = enrich_dataset_with_weather(df_ml)
+       df_ml.to_parquet(PARQUET_PATH)
+       print("✓ Dataset météo sauvegardé dans le cache parquet")
+
+    df_ml["etd"] = pd.to_datetime(df_ml["etd"], errors="coerce")
+    df_ml = df_ml.sort_values("etd").reset_index(drop=True)
+
     y = df_ml["is_delayed"].astype(int)
     features_brutes = [
         "transit_time", "frequency_num", "volume_ratio_allocated_booked",
         "volume_booked", "confirmed_volume",
         "month_sin", "month_cos",
+        "etd_wind_speed_kmh","eta_temperature_max", 
         "carrier", "port_chargement", "port_dechargement",
         "pays_destination",
     ]
     X = df_ml[features_brutes].copy()
 
-    # Split stratifié
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y,
-        test_size=proportion_test,
-        random_state=42,
-        stratify=y,
-    )
+    n_total = len(df_ml)
+    n_test = int(n_total * proportion_test)
+    n_train = n_total - n_test
 
+    X_train = X.iloc[:n_train].copy()
+    X_test = X.iloc[n_train:].copy()
+
+    y_train = y.iloc[:n_train].copy()
+    y_test = y.iloc[n_train:].copy()
+
+    print(f"Période train : {df_ml.iloc[:n_train]['etd'].min().date()} → {df_ml.iloc[:n_train]['etd'].max().date()}")
+    print(f"Période test  : {df_ml.iloc[n_train:]['etd'].min().date()} → {df_ml.iloc[n_train:]['etd'].max().date()}")
     # Taux retard carrier (après le split, sur train uniquement)
     X_train, X_test, taux_par_carrier, taux_global = calculer_taux_retard_carrier(
         X_train, X_test, y_train
@@ -207,8 +228,8 @@ def preparer_donnees(
     print(f"\nDataset ML     : {len(df_ml)} shipments")
     print(f"En retard      : {y.sum()} ({y.mean()*100:.1f}%)")
     print(f"À l'heure      : {(y == 0).sum()} ({(1 - y.mean())*100:.1f}%)")
-    print(f"Train set      : {len(X_train)} lignes")
-    print(f"Test set       : {len(X_test)} lignes")
+    print(f"Train set      : {len(X_train)} lignes (plus anciens)")
+    print(f"Test set       : {len(X_test)} lignes (plus recents, jamais vus)")
     print(f"Features       : {TOUTES_FEATURES}")
 
     return X_train, X_test, y_train, y_test, taux_par_carrier, taux_global
@@ -252,30 +273,24 @@ def construire_pipeline(
         ],
         remainder="drop",
     )
-    pipeline = ImbPipeline(
-    steps=[
-        ("preprocesseur", preprocesseur),
-        ("smote", SMOTE(
-            sampling_strategy=0.4,  # retards → 40% des majoritaires
-            k_neighbors=5,
-            random_state=42,
-        )),
-        (
-            "modele",
-            RandomForestClassifier(
-                n_estimators=n_estimators,
-                max_depth=max_depth,
-                min_samples_leaf=min_samples_leaf,
-                min_samples_split=min_samples_split,
-                max_features=max_features,
-                class_weight="balanced",
-                random_state=42,
-                n_jobs=-1,
+    pipeline = Pipeline(
+        steps=[
+            ("preprocesseur", preprocesseur),
+            (
+                "modele",
+                RandomForestClassifier(
+                    n_estimators=n_estimators,
+                    max_depth=max_depth,
+                    min_samples_leaf=min_samples_leaf,
+                    min_samples_split=min_samples_split,
+                    max_features=max_features,
+                    class_weight="balanced",
+                    random_state=42,
+                    n_jobs=-1,
+                ),
             ),
-        ),
-    ]
-)
-
+        ]
+    )
     return pipeline
 
 
@@ -414,21 +429,22 @@ def evaluer_modele(
 # ═══════════════════════════════════════════════════════════════════════════
 
 def afficher_importance_features(pipeline: Pipeline, top_n: int = 20) -> pd.DataFrame:
-    cat_encoder = pipeline.named_steps["preprocesseur"].named_transformers_["cat"]
-    cat_names   = cat_encoder.get_feature_names_out(FEATURES_CAT).tolist()
+    """Affiche les features les plus importantes selon le Random Forest."""
+    cat_names = (
+        pipeline.named_steps["preprocesseur"]
+        .named_transformers_["cat"]
+        .get_feature_names_out(FEATURES_CAT)
+        .tolist()
+    )
     all_names   = FEATURES_NUM + cat_names
     importances = pipeline.named_steps["modele"].feature_importances_
-
-    # Aligner les longueurs
-    min_len = min(len(all_names), len(importances))
-    all_names   = all_names[:min_len]
-    importances = importances[:min_len]
 
     df_imp = (
         pd.DataFrame({"feature": all_names, "importance": importances})
         .sort_values("importance", ascending=False)
         .reset_index(drop=True)
     )
+
     print(f"\n=== TOP {top_n} FEATURES ===")
     print(df_imp.head(top_n).to_string(index=False))
     return df_imp
@@ -500,6 +516,13 @@ def predire_retard(nouveau_shipment: dict) -> dict:
         or (vol_confirmed / vol_booked if vol_booked > 0 else np.nan)
     )
 
+    meteo = get_weather_for_prediction(
+    nouveau_shipment.get("port_chargement"),
+    nouveau_shipment.get("port_dechargement"),
+    nouveau_shipment.get("etd"),
+    nouveau_shipment.get("eta"),
+   )
+
     X_nouveau = pd.DataFrame([{
         "transit_time":                  nouveau_shipment.get("transit_time", np.nan),
         "frequency_num":                 frequency_num,
@@ -513,6 +536,7 @@ def predire_retard(nouveau_shipment: dict) -> dict:
         "port_chargement":               nouveau_shipment.get("port_chargement") or np.nan,
         "port_dechargement":             nouveau_shipment.get("port_dechargement") or np.nan,
         "pays_destination":              nouveau_shipment.get("pays_destination") or np.nan,
+        **meteo,
     }])
 
     probabilite = float(pipeline.predict_proba(X_nouveau)[0][1])
@@ -541,7 +565,7 @@ def predire_retard(nouveau_shipment: dict) -> dict:
 if __name__ == "__main__":
     print("=" * 60)
     print("  ENTRAÎNEMENT : RANDOM FOREST — PRÉDICTION DE RETARD")
-    print("  Split aléatoire stratifié 80/20")
+    print("  === (evaluation chronologique : train = passe, test = futur) ===")
     print("=" * 60)
 
     # 1. Chargement et préparation
@@ -581,3 +605,4 @@ if __name__ == "__main__":
     }
     resultat = predire_retard(exemple)
     print(f"Shipment test -> {resultat['label']} (probabilite : {resultat['probabilite_retard']}%, risque : {resultat['niveau_risque']})")
+     
