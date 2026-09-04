@@ -24,7 +24,7 @@ from backend.repositories.shipment_repository import (
     get_all_shipments,
 )
 from backend.schemas.prediction_schema import PredictionResponseSchema
-from engine.Regression_logistique import predire_retard
+from engine.Regression_logistique_chronologique import predire_retard
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -94,21 +94,17 @@ def predire_retard_shipment(
 
     # 4. Construire le dict de features pour le modèle
     features_ml = {
-        "transit_time":                  shipment["transit_time"],
-        "frequency":                     shipment["frequency"],
-        "month":                         shipment["month"],
-        "volume_booked":                 shipment["volume_booked"],
-        "confirmed_volume":              shipment["confirmed_volume"],
-        "charged_volume":                shipment["charged_volume"],
-        "volume_ratio_allocated_booked": shipment["volume_ratio_allocated_booked"],
-        "carrier":                       shipment["carrier"],
-        "port_chargement":               shipment["port_chargement"],
-        "port_dechargement":             shipment["port_dechargement"],
-        "pays_destination":              shipment["pays_destination"],
-        "incoterm":                      shipment["incoterm"],
-        "etd": str(shipment["etd"]) if shipment.get("etd") else None,
-        "eta": str(shipment["eta"]) if shipment.get("eta") else None,
-    }
+    "transit_time":                  shipment["transit_time"],
+    "frequency":                     shipment["frequency"],
+    "month":                         shipment["month"],
+    "volume_booked":                 shipment["volume_booked"],
+    "confirmed_volume":              shipment["confirmed_volume"],
+    "volume_ratio_allocated_booked": shipment.get("volume_ratio_allocated_booked"),
+    "carrier":                       shipment["carrier"],
+    "port_chargement":               shipment["port_chargement"],
+    "port_dechargement":             shipment["port_dechargement"],
+    "pays_destination":              shipment["pays_destination"],
+}
 
     # 5. Appel du modèle ML
     resultat = predire_retard(features_ml)
