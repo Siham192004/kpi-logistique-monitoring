@@ -8,7 +8,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY backend/ ./backend/
 COPY models/ ./models/
-COPY data/ ./data/
 COPY database/ ./database/
 COPY engine/ ./engine/
 COPY etl/ ./etl/
