@@ -1,0 +1,6 @@
+env/
+kpi-frontend/
+__pycache__/
+*.pyc
+.git/
+notebooks/
