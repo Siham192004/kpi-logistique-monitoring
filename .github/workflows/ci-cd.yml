@@ -1,0 +1,28 @@
+name: CI/CD KPI Monitoring Platform
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Récupérer le code
+        uses: actions/checkout@v3
+
+      - name: Builder les images Docker
+        run: docker compose build
+
+      - name: Vérifier que les containers démarrent
+        run: |
+          docker compose up -d
+          sleep 10
+          docker compose ps
+
+      - name: Tester le backend
+        run: curl -f http://localhost:8000/ || exit 1
+
+      - name: Arrêter les containers
+        run: docker compose down
