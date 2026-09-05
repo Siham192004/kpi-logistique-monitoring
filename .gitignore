@@ -2,7 +2,6 @@ env/
 __pycache__/
 *.pyc
 *.db
-*.pkl
 .env
 Thumbs.db
 desktop.ini
