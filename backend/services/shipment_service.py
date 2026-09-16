@@ -62,6 +62,7 @@ COLONNES_SHIPMENT = {
     "transit_time_reel", "eta_deviation", "etd_deviation",
     "is_delayed", "volume_ratio_loaded", "volume_ratio_allocated_booked",
     "niveau_retard", "vessel_id", "createur_id",
+    "created_at", "updated_at", "updated_by_id",
 }
 
 
@@ -301,7 +302,7 @@ def creer_shipment(db: Session, data: ShipmentCreateSchema, createur_id: int) ->
 # MODIFICATION
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def modifier_shipment(db: Session, shipment_id: int, data: ShipmentUpdateSchema) -> dict:
+def modifier_shipment(db: Session, shipment_id: int, data: ShipmentUpdateSchema, modificateur_id: int) -> dict:
     """
     Modifie un shipment existant.
 
@@ -321,6 +322,11 @@ def modifier_shipment(db: Session, shipment_id: int, data: ShipmentUpdateSchema)
 
     # 2. Champs modifiés par l'utilisateur
     data_dict = data.model_dump(exclude_none=True)
+
+    # ← Traçabilité : qui a modifié et quand
+    from datetime import datetime, timezone
+    data_dict["updated_by_id"] = modificateur_id
+    data_dict["updated_at"]    = datetime.now(timezone.utc)
 
     # 3. Vessel mis à jour si vessel_nom ou carrier changé
     vessel_nom = data_dict.pop("vessel_nom", None)
@@ -359,13 +365,9 @@ def modifier_shipment(db: Session, shipment_id: int, data: ShipmentUpdateSchema)
 # SUPPRESSION
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def supprimer_shipment(db: Session, shipment_id: int) -> DeleteResponseSchema:
-    """
-    Supprime un shipment.
-    ✅ Pas de bug ici : delete_shipment() reçoit juste un shipment_id (int),
-    pas de dict → pas de risque d'erreur 500 liée aux colonnes.
-    """
-    shipment = get_shipment_by_id(db, shipment_id)
+def supprimer_shipment(db: Session, shipment_id: int, suppresseur_id: int) -> DeleteResponseSchema:
+    
+    shipment = get_shipment_by_id(db, shipment_id)          # ✅ 2 args (pas 3)
     if not shipment:
         return DeleteResponseSchema(
             success=False,
@@ -380,7 +382,7 @@ def supprimer_shipment(db: Session, shipment_id: int) -> DeleteResponseSchema:
                     f"associé(s) à ce shipment."
         )
 
-    if delete_shipment(db, shipment_id):
+    if delete_shipment(db, shipment_id, suppresseur_id):    # ✅ 3 args
         db.commit()
         return DeleteResponseSchema(
             success=True,
@@ -391,7 +393,6 @@ def supprimer_shipment(db: Session, shipment_id: int) -> DeleteResponseSchema:
         success=False,
         message="Erreur lors de la suppression."
     )
-
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # RECALCUL BATCH — Colonnes dérivées pour données historiques (Fix 7)

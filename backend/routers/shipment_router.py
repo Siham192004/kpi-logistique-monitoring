@@ -76,6 +76,17 @@ def get_carriers(db: Session = Depends(get_db), user: dict = Depends(get_current
     return lister_carriers(db)
 
 
+@router.get("/supprimes/liste", tags=["Shipments"])
+def get_shipments_supprimes(
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_operateur_ou_manager),
+):
+    from backend.repositories.shipment_repository import get_shipments_supprimes
+    result = get_shipments_supprimes(db)
+    if result.empty:
+        return []
+    return result.to_dict(orient="records")
+
 @router.get("/{shipment_id}", tags=["Shipments"])
 def get_shipment(
     shipment_id: int,
@@ -87,7 +98,6 @@ def get_shipment(
     Retourne 404 si introuvable.
     """
     return obtenir_shipment(db, shipment_id)
-
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # CRÉATION — Opérateur uniquement
@@ -132,8 +142,7 @@ def update_shipment(
     Les colonnes dérivées sont recalculées automatiquement par l'ETL.
     Retourne 404 si le shipment est introuvable.
     """
-    return modifier_shipment(db, shipment_id, data)
-
+    return modifier_shipment(db, shipment_id, data, modificateur_id=user["id"])
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # SUPPRESSION — Opérateur uniquement
@@ -155,4 +164,4 @@ def delete_shipment(
     - success=True  → "Shipment supprimé avec succès."
     - success=False → "Suppression impossible : N message(s) associé(s)."
     """
-    return supprimer_shipment(db, shipment_id)
+    return supprimer_shipment(db, shipment_id,suppresseur_id=user["id"])

@@ -17,21 +17,25 @@ app = FastAPI(
 )
 
 # ── CORS : autorise React (Vite) à communiquer avec le backend ───────────────
+# CORS — ajouter localhost:3000
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=[
+        "http://localhost:5173",  # Vite dev
+        "http://localhost:3000",  # Docker
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# ── Routers ───────────────────────────────────────────────────────────────────
-app.include_router(shipment_router.router,   prefix="/shipments",  tags=["Shipments"])
-app.include_router(kpi_router.router,        prefix="/kpis",       tags=["KPIs"])
-app.include_router(prediction_router.router, prefix="/predict",    tags=["Prédiction"])
-app.include_router(messaging_router.router,  prefix="/messages",   tags=["Messagerie"])
-app.include_router(admin_router.router,      prefix="/admin",      tags=["Administration"])
-app.include_router(export_router.router, prefix="/export", tags=["Export"])
+# Routers — ajouter prefix="/api" partout
+app.include_router(shipment_router.router,   prefix="/api/shipments",  tags=["Shipments"])
+app.include_router(kpi_router.router,        prefix="/api/kpis",       tags=["KPIs"])
+app.include_router(prediction_router.router, prefix="/api/predict",    tags=["Prédiction"])
+app.include_router(messaging_router.router,  prefix="/api/messages",   tags=["Messagerie"])
+app.include_router(admin_router.router,      prefix="/api/admin",      tags=["Administration"])
+app.include_router(export_router.router,     prefix="/api/export",     tags=["Export"])
 
 
 @app.get("/", tags=["Health"])

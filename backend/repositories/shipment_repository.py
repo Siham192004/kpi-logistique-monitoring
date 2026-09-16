@@ -43,12 +43,24 @@ def _shipment_to_dict(s: Shipment) -> dict:
         "niveau_retard":                s.niveau_retard,
         "vessel_id":                    s.vessel_id,
         "createur_id":                  s.createur_id,
+        # Traçabilité
+        "created_at":                   s.created_at,
+        "updated_at":                   s.updated_at,
+        "updated_by_id":                s.updated_by_id,
         # JOIN vessel
         "vessel_nom":                   s.vessel.nom     if s.vessel else None,
         "carrier":                      s.vessel.carrier if s.vessel else None,
         # JOIN user → opérateur (prenom + nom séparés pour le frontend)
         "operateur_prenom":             s.createur.prenom if s.createur else None,
         "operateur_nom":                s.createur.nom    if s.createur else None,
+        # JOIN user → modificateur (qui a modifié)
+        "modificateur_prenom": s.modificateur.prenom if s.modificateur else None,
+        "modificateur_nom":    s.modificateur.nom    if s.modificateur else None,
+        # Traçabilité suppression
+        "deleted_at":       s.deleted_at,
+        "deleted_by_id":    s.deleted_by_id,
+        "suppresseur_prenom": s.suppresseur.prenom if s.suppresseur else None,
+        "suppresseur_nom":    s.suppresseur.nom    if s.suppresseur else None,
     }
 
 
@@ -64,14 +76,31 @@ def get_all_shipments(db: Session) -> pd.DataFrame:
     shipments = (
         db.query(Shipment)
         .join(Vessel)
-        .filter(Shipment.shipment_status != "Cancelled")
+        .filter(
+            Shipment.shipment_status != "Cancelled",
+            Shipment.deleted_at == None  # ← exclure les supprimés
+        )
         .all()
     )
     return pd.DataFrame([_shipment_to_dict(s) for s in shipments])
 
 
 def get_all_shipments_avec_annules(db: Session) -> pd.DataFrame:
-    shipments = db.query(Shipment).join(Vessel).all()
+    shipments = (
+        db.query(Shipment)
+        .join(Vessel)
+        .filter(Shipment.deleted_at == None)  # ← exclure les supprimés
+        .all()
+    )
+    return pd.DataFrame([_shipment_to_dict(s) for s in shipments])
+
+def get_shipments_supprimes(db: Session) -> pd.DataFrame:
+    shipments = (
+        db.query(Shipment)
+        .join(Vessel)
+        .filter(Shipment.deleted_at != None)
+        .all()
+    )
     return pd.DataFrame([_shipment_to_dict(s) for s in shipments])
 
 
@@ -152,11 +181,17 @@ def update_colonnes_derivees(db: Session, shipment_id: int, data: dict) -> bool:
 # SUPPRESSION — SHIPMENT
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def delete_shipment(db: Session, shipment_id: int) -> bool:
+def delete_shipment(db: Session, shipment_id: int, deleted_by_id: int) -> bool:
+    from datetime import datetime, timezone
     rows = (
         db.query(Shipment)
         .filter(Shipment.id == shipment_id)
-        .delete()
+        .update({
+            "deleted_at":    datetime.now(timezone.utc),
+            "deleted_by_id": deleted_by_id,
+            "updated_at":    None,   # ✅ annule le onupdate automatique
+            "updated_by_id": None,   # ✅ s'assure qu'il n'y a pas de modificateur
+        })
     )
     return rows > 0
 

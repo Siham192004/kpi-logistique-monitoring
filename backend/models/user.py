@@ -84,6 +84,8 @@ class User(Base):
     shipments_crees: Mapped[list[Shipment]] = relationship(
         "Shipment",
         back_populates="createur",
+        foreign_keys="[Shipment.createur_id]",
+        overlaps="modificateur",
     )
 
     def __repr__(self) -> str:

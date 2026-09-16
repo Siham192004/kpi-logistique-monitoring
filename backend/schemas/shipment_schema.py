@@ -1,6 +1,6 @@
 from pydantic import BaseModel, field_validator, model_validator
 from typing import Optional
-from datetime import date
+from datetime import date, datetime
 from enum import Enum
 import re
 
@@ -233,6 +233,16 @@ class ShipmentResponseSchema(BaseModel):
     createur_id:                   int
     operateur_prenom:              Optional[str]   = None
     operateur_nom:                 Optional[str]   = None
+    # ── Traçabilité ───────────────────────────────────────────────────────────
+    created_at:                    Optional[datetime] = None
+    updated_at:                    Optional[datetime] = None
+    updated_by_id:                 Optional[int]      = None
+    modificateur_prenom:           Optional[str]      = None
+    modificateur_nom:              Optional[str]      = None
+    deleted_at:           Optional[datetime] = None
+    deleted_by_id:        Optional[int]      = None
+    suppresseur_prenom:   Optional[str]      = None
+    suppresseur_nom:      Optional[str]      = None
 
     class Config:
         from_attributes = True

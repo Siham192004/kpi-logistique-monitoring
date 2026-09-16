@@ -12,7 +12,7 @@ Note : l'opérateur n'est PAS une colonne — il passe par la relation
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timezone, datetime
 from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import (
@@ -22,6 +22,7 @@ from sqlalchemy import (
     Integer,
     String,
     UniqueConstraint,
+    DateTime,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -93,14 +94,42 @@ class Shipment(Base):
     volume_ratio_allocated_booked: Mapped[Optional[float]] = mapped_column(Float)
     niveau_retard:                 Mapped[Optional[str]]   = mapped_column(String)
 
+        # ── Traçabilité ───────────────────────────────────────────────────────────
+    created_at:    Mapped[Optional[datetime]] = mapped_column(
+        DateTime,
+        default=lambda: datetime.now(timezone.utc),
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    DateTime,
+    nullable=True,
+    onupdate=lambda: datetime.now(timezone.utc),
+)
+    updated_by_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("user.id"), nullable=True
+    )
+
+    deleted_at:    Mapped[Optional[datetime]] = mapped_column(
+        DateTime, nullable=True
+    )
+    deleted_by_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("user.id"), nullable=True
+    )
+
     # ── Clés étrangères ───────────────────────────────────────────────────────
     vessel_id:   Mapped[int] = mapped_column(Integer, ForeignKey("vessel.id"), nullable=False)
     createur_id: Mapped[int] = mapped_column(Integer, ForeignKey("user.id"),   nullable=False)
 
     # ── Relations ─────────────────────────────────────────────────────────────
     # L'opérateur est accessible via : shipment.createur.prenom + " " + shipment.createur.nom
-    vessel:   Mapped[Vessel] = relationship("Vessel", back_populates="shipments")
-    createur: Mapped[User]   = relationship("User",   back_populates="shipments_crees")
+    vessel:        Mapped[Vessel] = relationship("Vessel", back_populates="shipments")
+    createur:      Mapped[User]   = relationship("User",   back_populates="shipments_crees",
+                                                 foreign_keys=[createur_id])
+    modificateur:  Mapped[Optional[User]] = relationship("User",
+                                                 foreign_keys=[updated_by_id])
+
+    suppresseur: Mapped[Optional[User]] = relationship(
+        "User", foreign_keys=[deleted_by_id]
+    )
 
     messages: Mapped[list[Message]] = relationship(
         "Message",

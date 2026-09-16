@@ -39,7 +39,6 @@ class Role(Base):
     __tablename__ = "role"
     id       = Column(Integer, primary_key=True, autoincrement=True)
     nom_role = Column(String, nullable=False, unique=True)
-    users    = relationship("User", back_populates="role")
 
 
 class User(Base):
@@ -53,13 +52,6 @@ class User(Base):
     tentatives_echouees = Column(Integer, nullable=False, default=0)
     doit_changer_mdp    = Column(Integer, nullable=False, default=1)
     role_id             = Column(Integer, ForeignKey("role.id"), nullable=False)
-    role             = relationship("Role",     back_populates="users")
-    shipments_crees  = relationship("Shipment", back_populates="createur",
-                                    foreign_keys="Shipment.createur_id")
-    messages_envoyes = relationship("Message",  back_populates="expediteur",
-                                    foreign_keys="Message.expediteur_id")
-    messages_recus   = relationship("Message",  back_populates="destinataire",
-                                    foreign_keys="Message.destinataire_id")
 
 
 class Vessel(Base):
@@ -68,8 +60,6 @@ class Vessel(Base):
     nom     = Column(String,  nullable=False)
     carrier = Column(String,  nullable=False)
     __table_args__ = (UniqueConstraint("nom", "carrier", name="uq_vessel_nom_carrier"),)
-    shipments = relationship("Shipment", back_populates="vessel")
-
 
 class Shipment(Base):
     __tablename__ = "shipment"
@@ -88,7 +78,7 @@ class Shipment(Base):
     transit_time                  = Column(Integer)
     frequency                     = Column(String)
     month                         = Column(String)
-    year                          = Column(Integer)    # ✅ ex: 2024
+    year                          = Column(Integer)
     shipment_status               = Column(String, nullable=False, default="Normal")
     type_annulation               = Column(String, nullable=False, default="Non annulé")
     transit_time_reel             = Column(Float)
@@ -100,19 +90,11 @@ class Shipment(Base):
     niveau_retard                 = Column(String)
     vessel_id                     = Column(Integer, ForeignKey("vessel.id"), nullable=False)
     createur_id                   = Column(Integer, ForeignKey("user.id"),   nullable=False)
-    vessel   = relationship("Vessel", back_populates="shipments")
-    createur = relationship("User",   back_populates="shipments_crees", foreign_keys=[createur_id])
-    messages = relationship("Message", back_populates="shipment")
-    # Dans votre modèle SQLAlchemy (models/shipment.py)
-    etd_precipitation_mm = Column(Float, nullable=True)
-    etd_wind_speed_kmh   = Column(Float, nullable=True)
-    etd_temperature_max  = Column(Float, nullable=True)
-    etd_weather_code     = Column(Integer, nullable=True)
-    eta_precipitation_mm = Column(Float, nullable=True)
-    eta_wind_speed_kmh   = Column(Float, nullable=True)
-    eta_temperature_max  = Column(Float, nullable=True)
-    eta_weather_code     = Column(Integer, nullable=True)
-
+    created_at                    = Column(DateTime, nullable=True)
+    updated_at                    = Column(DateTime, nullable=True, onupdate=datetime.now)
+    updated_by_id                 = Column(Integer, ForeignKey("user.id"), nullable=True)
+    deleted_at    = Column(DateTime, nullable=True)
+    deleted_by_id = Column(Integer, ForeignKey("user.id"), nullable=True)
 
 class Message(Base):
     __tablename__ = "message"
@@ -123,10 +105,6 @@ class Message(Base):
     expediteur_id   = Column(Integer,  ForeignKey("user.id"),     nullable=False)
     destinataire_id = Column(Integer,  ForeignKey("user.id"),     nullable=False)
     shipment_id     = Column(Integer,  ForeignKey("shipment.id"), nullable=True)
-    expediteur   = relationship("User",     back_populates="messages_envoyes", foreign_keys=[expediteur_id])
-    destinataire = relationship("User",     back_populates="messages_recus",   foreign_keys=[destinataire_id])
-    shipment     = relationship("Shipment", back_populates="messages")
-
 
 def get_db():
     db = SessionLocal()
@@ -297,15 +275,6 @@ def charger_donnees_historiques(filepath: str = "data/maritime_dataset_nettoye.x
     # ✅ FIX: nom exact de la colonne dans le fichier ETL
     "volume_ratio_allocated": "volume_ratio_allocated_booked",
     "niveau_retard":                "niveau_retard",
-    # ✅ AJOUT: colonnes météo
-    "etd_precipitation_mm":         "etd_precipitation_mm",
-    "etd_wind_speed_kmh":           "etd_wind_speed_kmh",
-    "etd_temperature_max":          "etd_temperature_max",
-    "etd_weather_code":             "etd_weather_code",
-    "eta_precipitation_mm":         "eta_precipitation_mm",
-    "eta_wind_speed_kmh":           "eta_wind_speed_kmh",
-    "eta_temperature_max":          "eta_temperature_max",
-    "eta_weather_code":             "eta_weather_code",
 }
 
         lignes_inserees = 0

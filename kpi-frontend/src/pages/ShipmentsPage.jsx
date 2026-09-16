@@ -116,6 +116,7 @@ export const ShipmentsPage = () => {
   const isOperateur = user?.role === 'Control Tower Team'
 
   const [shipments, setShipments]         = useState([])
+  const [supprimes, setSupprimes]         = useState([])
   const [carriers, setCarriers]           = useState([])
   const [loading, setLoading]             = useState(true)
   const [search, setSearch]               = useState('')
@@ -144,12 +145,14 @@ export const ShipmentsPage = () => {
     try {
       const params = new URLSearchParams()
       if (filterCarrier) params.set('carrier', filterCarrier)
-      const [s, c] = await Promise.all([
+      const [s, c, sup] = await Promise.all([
         apiFetch(`/shipments/?${params}`),
         apiFetch('/shipments/carriers'),
+        apiFetch('/shipments/supprimes/liste'),
       ])
       setShipments(s)
       setCarriers(c.map(x => x.carrier || x))
+      setSupprimes(sup)
     } catch (e) {
       toast.error('Erreur de chargement')
     } finally {
@@ -160,17 +163,20 @@ export const ShipmentsPage = () => {
   useEffect(() => { load() }, [load])
 
   // ── Filtrage avec onglets ──
-  const filtered = shipments.filter(s => {
-    const matchSearch = !search || [s.carrier, s.vessel_nom, s.port_chargement, s.port_dechargement, s.operateur_prenom, s.operateur_nom, [s.operateur_prenom, s.operateur_nom].filter(Boolean).join(' '), ]
+ const dataSource = activeTab === 'supprimes' ? supprimes : shipments
+
+const filtered = dataSource.filter(s => {
+    const matchSearch = !search || [s.carrier, s.vessel_nom, s.port_chargement, s.port_dechargement, s.operateur_prenom, s.operateur_nom, [s.operateur_prenom, s.operateur_nom].filter(Boolean).join(' ')]
       .some(v => v?.toLowerCase().includes(search.toLowerCase()))
 
     const matchCarrier = !filterCarrier || s.carrier === filterCarrier
 
     const matchTab =
-      activeTab === 'tous'     ? true :
-      activeTab === 'en_cours' ? (s.shipment_status === 'Normal' && !s.ata) :
-      activeTab === 'termines' ? (s.shipment_status === 'Normal' && !!s.ata) :
-      activeTab === 'annules'  ? (s.shipment_status === 'Cancelled') :
+      activeTab === 'tous'      ? true :
+      activeTab === 'en_cours'  ? (s.shipment_status === 'Normal' && !s.ata) :
+      activeTab === 'termines'  ? (s.shipment_status === 'Normal' && !!s.ata) :
+      activeTab === 'annules'   ? (s.shipment_status === 'Cancelled') :
+      activeTab === 'supprimes' ? true :
       true
 
     return matchSearch && matchCarrier && matchTab
@@ -344,6 +350,7 @@ const handleExportExcel = async () => {
      en_cours: shipments.filter(s => s.shipment_status === 'Normal' && !s.ata).length,
      termines: shipments.filter(s => s.shipment_status === 'Normal' && !!s.ata).length,
      annules:  shipments.filter(s => s.shipment_status === 'Cancelled').length,
+     supprimes: supprimes.length, 
   }
 
   return (
@@ -374,6 +381,7 @@ const handleExportExcel = async () => {
           { key: 'en_cours', label: '🚢 En cours',  count: counts.en_cours },
           { key: 'termines', label: '✅ Terminés',  count: counts.termines },
           { key: 'annules',  label: '❌ Annulés',   count: counts.annules },
+          { key: 'supprimes', label: '🗑️ Supprimés', count: counts.supprimes },
         ].map(tab => (
           <button
             key={tab.key}
@@ -519,6 +527,32 @@ const handleExportExcel = async () => {
               ['Ratio chargé / confirmé',  detailTarget.volume_ratio_loaded != null ? `${(detailTarget.volume_ratio_loaded * 100).toFixed(1)} %` : null],
               ['Ratio confirmé / réservé', detailTarget.volume_ratio_allocated_booked != null ? `${(detailTarget.volume_ratio_allocated_booked * 100).toFixed(1)} %` : null],
               ['Niveau de retard',         detailTarget.niveau_retard],
+            ].map(([label, value]) => (
+              <div key={label} className={styles.detailItem}>
+                <span className={styles.detailLabel}>{label}</span>
+                <span className={styles.detailValue}>{value || '—'}</span>
+              </div>
+            ))}
+                        <div className={styles.detailDivider} />
+            <div className={styles.detailDivider} />
+            <div className={styles.detailSectionHeader}>Traçabilité</div>
+            <div className={styles.detailSectionHeader} />
+            {[
+              ['Créé le',        detailTarget.created_at
+                ? new Date(detailTarget.created_at).toLocaleString('fr-FR')
+                : null],
+              ['Modifié le',     detailTarget.updated_at
+                ? new Date(detailTarget.updated_at).toLocaleString('fr-FR')
+                : null],
+              ['Modifié par', detailTarget.modificateur_prenom
+  ? `${detailTarget.modificateur_prenom} ${detailTarget.modificateur_nom}`
+  : null],
+              ['Supprimé le',  detailTarget.deleted_at
+  ? new Date(detailTarget.deleted_at).toLocaleString('fr-FR')
+  : null],
+['Supprimé par', detailTarget.suppresseur_prenom
+  ? `${detailTarget.suppresseur_prenom} ${detailTarget.suppresseur_nom}`
+  : null],
             ].map(([label, value]) => (
               <div key={label} className={styles.detailItem}>
                 <span className={styles.detailLabel}>{label}</span>
