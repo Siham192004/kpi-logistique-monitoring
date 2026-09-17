@@ -30,15 +30,24 @@ jobs:
           docker compose down
 
   deploy:
-    runs-on: self-hosted
-    needs: build-and-test
-    steps:
-      - name: Récupérer le code
-        uses: actions/checkout@v3
+  runs-on: self-hosted
+  needs: build-and-test
+  steps:
+    - name: Récupérer le code
+      uses: actions/checkout@v3
 
-      - name: Redémarrer Docker automatiquement
-        run: |
-         docker ps -q | ForEach-Object { docker stop $_ }
-         docker compose down
-         docker compose up -d --build
-        shell: powershell
+    - name: Créer le fichier .env
+      run: |
+        echo "ADMIN_PASSWORD=${{ secrets.ADMIN_PASSWORD }}" > .env
+        echo "OPERATEUR_DEFAULT_PASSWORD=${{ secrets.OPERATEUR_DEFAULT_PASSWORD }}" >> .env
+        echo "SECRET_KEY=${{ secrets.SECRET_KEY }}" >> .env
+        echo "ALGORITHM=${{ secrets.ALGORITHM }}" >> .env
+        echo "ACCESS_TOKEN_EXPIRE_MINUTES=${{ secrets.ACCESS_TOKEN_EXPIRE_MINUTES }}" >> .env
+      shell: powershell
+
+    - name: Redémarrer Docker automatiquement
+      run: |
+        docker ps -q | ForEach-Object { docker stop $_ }
+        docker compose down
+        docker compose up -d --build
+      shell: powershell
