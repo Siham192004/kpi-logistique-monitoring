@@ -30,5 +30,6 @@ jobs:
 
       - name: Redémarrer Docker automatiquement
         run: |
-          docker compose down
-          docker compose up -d --build
+           docker stop $(docker ps -q) 2>$null || true
+           docker compose down
+           docker compose up -d --build
