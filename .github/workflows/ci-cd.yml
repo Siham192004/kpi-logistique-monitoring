@@ -47,9 +47,12 @@ jobs:
       - name: Copier les données vers le dossier runner
         shell: powershell
         run: |
-          Copy-Item "C:\Users\HP\Desktop\Stage_PFA_2026\kpi-monitoring-platform\data\*" ".\data\" -Force -Recurse
+          $source = Join-Path $env:USERPROFILE "Desktop\Stage_PFA_2026\kpi-monitoring-platform\data"
+          $dest = Join-Path $pwd "data"
+          if (-not (Test-Path $dest)) { New-Item -ItemType Directory -Path $dest }
+          Copy-Item "$source\*" "$dest\" -Force -Recurse
 
-          
+
       - name: Redémarrer Docker automatiquement
         shell: powershell
         run: |
