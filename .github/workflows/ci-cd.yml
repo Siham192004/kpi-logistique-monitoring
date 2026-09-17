@@ -50,3 +50,9 @@ jobs:
           docker ps -q | ForEach-Object { docker stop $_ }
           docker compose down
           docker compose up -d --build
+      
+      - name: Initialiser la base de données
+        shell: powershell
+        run: |
+          Start-Sleep -Seconds 15
+          docker exec kpi-logistique-monitoring-backend-1 python database/db.py
