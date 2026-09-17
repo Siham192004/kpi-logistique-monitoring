@@ -44,6 +44,12 @@ jobs:
           $content = "ADMIN_PASSWORD=${{ secrets.ADMIN_PASSWORD }}`nOPERATEUR_DEFAULT_PASSWORD=${{ secrets.OPERATEUR_DEFAULT_PASSWORD }}`nSECRET_KEY=${{ secrets.SECRET_KEY }}`nALGORITHM=${{ secrets.ALGORITHM }}`nACCESS_TOKEN_EXPIRE_MINUTES=${{ secrets.ACCESS_TOKEN_EXPIRE_MINUTES }}"
           [System.IO.File]::WriteAllText(".env", $content, [System.Text.Encoding]::UTF8)
 
+      - name: Copier les données vers le dossier runner
+        shell: powershell
+        run: |
+          Copy-Item "C:\Users\HP\Desktop\Stage_PFA_2026\kpi-monitoring-platform\data\*" ".\data\" -Force -Recurse
+
+          
       - name: Redémarrer Docker automatiquement
         shell: powershell
         run: |
