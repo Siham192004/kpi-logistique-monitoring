@@ -9,7 +9,7 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - ./data:/app/data
+      - C:\Users\HP\Desktop\Stage_PFA_2026\kpi-monitoring-platform\data:/app/data
     env_file:
       - .env 
     environment:
