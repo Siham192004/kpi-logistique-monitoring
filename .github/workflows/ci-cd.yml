@@ -5,9 +5,8 @@ on:
     branches: [ main ]
 
 jobs:
-  build:
+  build-and-test:
     runs-on: ubuntu-latest
-
     steps:
       - name: Récupérer le code
         uses: actions/checkout@v3
@@ -15,14 +14,21 @@ jobs:
       - name: Builder les images Docker
         run: docker compose build
 
-      - name: Vérifier que les containers démarrent
+      - name: Tester le backend
         run: |
           docker compose up -d
           sleep 10
-          docker compose ps
+          curl -f http://localhost:8000/ || exit 1
+          docker compose down
 
-      - name: Tester le backend
-        run: curl -f http://localhost:8000/ || exit 1
+  deploy:
+    runs-on: self-hosted
+    needs: build-and-test
+    steps:
+      - name: Récupérer le code
+        uses: actions/checkout@v3
 
-      - name: Arrêter les containers
-        run: docker compose down
+      - name: Redémarrer Docker automatiquement
+        run: |
+          docker compose down
+          docker compose up -d --build
