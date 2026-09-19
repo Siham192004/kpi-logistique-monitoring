@@ -62,14 +62,13 @@ export const MessagesPage = () => {
   const [sending, setSending]             = useState(false)
   const [composeOpen, setComposeOpen]     = useState(false)
   const [composeForm, setComposeForm]     = useState({ destinataire_id: '', contenu: '' })
-  const { msgBadge: badge }               = useAuthStore()
+  const badge                             = useAuthStore(state => state.msgBadge)
   const [loadingConvs, setLoadingConvs]   = useState(true)
   const [hoveredMsg, setHoveredMsg]       = useState(null)
   const [deletingId, setDeletingId]       = useState(null)
 
   const messagesEndRef = useRef(null)
   const activeConvRef  = useRef(null)
-  const pollingRef     = useRef(null)
 
   useEffect(() => { activeConvRef.current = activeConv }, [activeConv])
 
