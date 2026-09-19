@@ -51,8 +51,8 @@ const PresenceDot = ({ enLigne, style = {} }) => (
 )
 
 export const MessagesPage = () => {
-  const { user } = useAuthStore()
-  const { presenceMap } = useAuthStore()
+  const user = useAuthStore(state => state.user)
+  const presenceMap = useAuthStore(state => state.presenceMap)
 
   const [conversations, setConversations] = useState([])
   const [destinataires, setDestinataires] = useState([])

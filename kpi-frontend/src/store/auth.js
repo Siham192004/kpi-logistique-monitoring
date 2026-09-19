@@ -19,11 +19,11 @@ export const useAuthStore = create((set, get) => ({
     })),
 
   setPresenceSnapshot: (userIds) =>
-    set(state => {
-      const map = { ...state.presenceMap }
-      userIds.forEach(id => { map[id] = true })
-      return { presenceMap: map }
-    }),
+  set(() => {
+    const map = {}
+    userIds.forEach(id => { map[id] = true })
+    return { presenceMap: map }
+  }),
 
   login: async (login, password) => {
     set({ isLoading: true, error: null })
