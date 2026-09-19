@@ -395,6 +395,12 @@ export const MessagesPage = () => {
             onChange={e => setComposeForm({ ...composeForm, destinataire_id: e.target.value })}
           >
             <option value="">Sélectionner un destinataire</option>
+            {/* ✅ Point de présence dans le select du modal */}
+            {destinataires.map(d => (
+              <option key={d.id} value={d.id}>
+
+              </option>
+            ))}
           </Select>
           <Textarea
             label="Message"
