@@ -21,9 +21,8 @@ const NAV_ITEMS = [
 export const Sidebar = () => {
   const { collapsed, setCollapsed, mobileOpen, setMobileOpen } = useSidebar()
   const isMobile = typeof window !== 'undefined' && window.innerWidth <= 768
-  const { msgBadge, setMsgBadge } = useAuthStore() 
+  const { msgBadge, setMsgBadge, user, logout } = useAuthStore() 
   const [profileOpen, setProfileOpen] = useState(false)         // ← AJOUT
-  const { user, logout } = useAuthStore()
   const location = useLocation()
 
   // ← AJOUT — Badge WebSocket
