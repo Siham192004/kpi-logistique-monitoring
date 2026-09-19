@@ -21,7 +21,7 @@ const NAV_ITEMS = [
 export const Sidebar = () => {
   const { collapsed, setCollapsed, mobileOpen, setMobileOpen } = useSidebar()
   const isMobile = typeof window !== 'undefined' && window.innerWidth <= 768
-  const [msgBadge, setMsgBadge] = useState(0) 
+  const { msgBadge, setMsgBadge } = useAuthStore() 
   const [profileOpen, setProfileOpen] = useState(false)         // ← AJOUT
   const { user, logout } = useAuthStore()
   const location = useLocation()
@@ -41,7 +41,8 @@ export const Sidebar = () => {
   let reconnectTimeout = null
 
   const connect = () => {
-    ws = new WebSocket(`ws://localhost:8000/messages/ws/${user.id}`)
+    const token = localStorage.getItem('kpi_token')  // ← ajouter
+    ws = new WebSocket(`ws://localhost:8000/api/messages/ws/${user.id}?token=${token}`)
 
     ws.onopen = () => {
       // Ping toutes les 30s pour garder la connexion vivante

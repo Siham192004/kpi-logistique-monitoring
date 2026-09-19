@@ -346,3 +346,19 @@ def reinitialiser_password_admin(
     result = reset_password_admin(db, user_id, nouveau_password)
     db.commit()
     return result
+
+def verifier_token_ws(token: str) -> dict:
+    """
+    Version WebSocket de verifier_token — accepte un string directement.
+    Utilisée pour les connexions WebSocket qui passent le token en query param.
+    """
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        login:   str = payload.get("sub")
+        role:    str = payload.get("role")
+        user_id: int = payload.get("id")
+        if login is None:
+            return None
+        return {"login": login, "role": role, "id": user_id}
+    except JWTError:
+        return None

@@ -10,6 +10,8 @@ export const useAuthStore = create((set, get) => ({
 
   // ✅ Présence — intégré directement ici
   presenceMap: {}, // { [user_id]: true/false }
+  msgBadge: 0,
+  setMsgBadge: (n) => set({ msgBadge: n }),
 
   setUserPresence: (userId, enLigne) =>
     set(state => ({
@@ -57,7 +59,7 @@ export const useAuthStore = create((set, get) => ({
 
   logout: () => {
     localStorage.removeItem('kpi_token')
-    set({ user: null, token: null, presenceMap: {} }) // ✅ reset présence au logout
+    set({ user: null, token: null, presenceMap: {}, msgBadge: 0}) // ✅ reset présence au logout
   },
 
   setUser: (user) => set({ user }),

@@ -2,7 +2,7 @@
 messaging_router.py — Routes HTTP + WebSocket : messagerie interne
 """
 
-from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect, Query
 from typing import Optional
 from sqlalchemy.orm import Session
 
@@ -10,6 +10,7 @@ from backend.services.auth_service import (
     get_current_operateur_ou_manager,
     get_current_user,   # ← ajouter cet import
     verifier_token,
+    verifier_token_ws,
 )
 from backend.services.messaging_service import (
     ws_manager,
@@ -37,9 +38,16 @@ router = APIRouter()
 # ═══════════════════════════════════════════════════════════════════════════════
 # WEBSOCKET
 # ═══════════════════════════════════════════════════════════════════════════════
-
 @router.websocket("/ws/{user_id}")
-async def websocket_badge(websocket: WebSocket, user_id: int):
+async def websocket_badge(
+    websocket: WebSocket,
+    user_id: int,
+    token: str = Query(...)
+):
+    payload = verifier_token_ws(token)
+    if not payload or payload.get("id") != user_id:
+        await websocket.close(code=4001)
+        return
     await websocket_endpoint(websocket, user_id)
 
 

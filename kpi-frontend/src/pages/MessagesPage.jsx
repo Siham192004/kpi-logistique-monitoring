@@ -62,7 +62,7 @@ export const MessagesPage = () => {
   const [sending, setSending]             = useState(false)
   const [composeOpen, setComposeOpen]     = useState(false)
   const [composeForm, setComposeForm]     = useState({ destinataire_id: '', contenu: '' })
-  const [badge, setBadge]                 = useState(0)
+  const { msgBadge: badge }               = useAuthStore()
   const [loadingConvs, setLoadingConvs]   = useState(true)
   const [hoveredMsg, setHoveredMsg]       = useState(null)
   const [deletingId, setDeletingId]       = useState(null)
@@ -112,7 +112,6 @@ export const MessagesPage = () => {
         (a, b) => new Date(b.dernier_message_date) - new Date(a.dernier_message_date)
       )
       setConversations(convList)
-      setBadge(b?.non_lus ?? 0)
       setDestinataires(
         Array.isArray(dests)                ? dests :
         Array.isArray(dests?.items)         ? dests.items :
@@ -155,8 +154,6 @@ export const MessagesPage = () => {
     await loadMessages(conv.autre_user_id)
     try {
       await apiFetch(`/messages/conversation/${conv.autre_user_id}/lu`, { method: 'PUT' })
-      const b = await apiFetch('/messages/badge')
-      setBadge(b?.non_lus ?? 0)
     } catch (e) {}
   }
 
