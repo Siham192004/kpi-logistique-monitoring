@@ -63,48 +63,11 @@ class WebSocketManager:
             self.connexions[user_id] = set()
         self.connexions[user_id].add(websocket)
 
-        # ✅ NOUVEAU — broadcast présence à tous les connectés
-        await self._broadcaster_presence(user_id, en_ligne=True)
-
     def deconnecter(self, user_id: int, websocket: WebSocket):
         if user_id in self.connexions:
             self.connexions[user_id].discard(websocket)
             if not self.connexions[user_id]:
                 del self.connexions[user_id]
-
-    async def deconnecter_et_broadcaster(self, user_id: int, websocket: WebSocket):
-        """Déconnecte et notifie les autres — appeler dans le finally du WS."""
-        self.deconnecter(user_id, websocket)
-        # Broadcaster seulement si plus aucune session active pour cet user
-        if user_id not in self.connexions:
-            await self._broadcaster_presence(user_id, en_ligne=False)
-
-    async def _broadcaster_presence(self, user_id: int, en_ligne: bool):
-        """
-        Envoie {"type": "presence", "user_id": X, "en_ligne": true/false}
-        à TOUS les users connectés (sauf l'user lui-même).
-        """
-        payload = json.dumps({
-            "type": "presence",
-            "user_id": user_id,
-            "en_ligne": en_ligne,
-        })
-        users_connectes = list(self.connexions.keys())
-        for uid in users_connectes:
-            if uid == user_id:
-                continue
-            connexions_mortes = set()
-            for ws in self.connexions.get(uid, set()):
-                try:
-                    await ws.send_text(payload)
-                except Exception:
-                    connexions_mortes.add(ws)
-            for ws in connexions_mortes:
-                self.connexions[uid].discard(ws)
-
-    def get_users_en_ligne(self) -> list[int]:
-        """Retourne la liste des user_ids actuellement connectés."""
-        return list(self.connexions.keys())
 
     async def envoyer_badge(self, user_id: int, db: Session):
         if user_id not in self.connexions:
@@ -147,13 +110,6 @@ async def websocket_endpoint(websocket: WebSocket, user_id: int):
         # Badge initial
         await ws_manager.envoyer_badge(user_id, db)
 
-        # ✅ NOUVEAU — snapshot des users déjà en ligne au moment de la connexion
-        users_en_ligne = ws_manager.get_users_en_ligne()
-        await websocket.send_text(json.dumps({
-            "type": "presence_snapshot",
-            "users_en_ligne": users_en_ligne,
-        }))
-
         while True:
             data = await websocket.receive_text()
             if data == "ping":
@@ -163,7 +119,7 @@ async def websocket_endpoint(websocket: WebSocket, user_id: int):
         pass
 
     finally:
-        await ws_manager.deconnecter_et_broadcaster(user_id, websocket)
+        ws_manager.deconnecter(user_id, websocket)
         db.close()
 
 
@@ -325,56 +281,3 @@ def get_badge(db: Session, user_id: int) -> BadgeSchema:
     """
     non_lus = get_unread_count(db, user_id)
     return BadgeSchema(non_lus=non_lus)
-
-
-async def notifier_nouveau_message(self, destinataire_id: int, db: Session):
-    # Badge
-    await self.envoyer_badge(destinataire_id, db)
-    
-    # ← AJOUTER : notifier qu'il y a un nouveau message
-    if destinataire_id in self.connexions:
-        payload = json.dumps({"type": "nouveau_message"})
-        connexions_mortes = set()
-        for ws in self.connexions[destinataire_id]:
-            try:
-                await ws.send_text(payload)
-            except Exception:
-                connexions_mortes.add(ws)
-        for ws in connexions_mortes:
-            self.connexions[destinataire_id].discard(ws)
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# WEBSOCKET — CONNEXION TEMPS RÉEL
-# ═══════════════════════════════════════════════════════════════════════════════
-
-async def websocket_endpoint(websocket: WebSocket, user_id: int):
-    """
-    Endpoint WebSocket pour le badge 🔔 en temps réel.
-
-    Crée sa propre session SQLAlchemy (Depends() non disponible en WebSocket).
-
-    Flux :
-    1. React se connecte au démarrage de l'app
-    2. FastAPI envoie immédiatement le badge initial
-    3. À chaque nouveau message → badge mis à jour automatiquement
-    4. Ping/pong pour maintenir la connexion active
-    5. À la déconnexion → nettoyage automatique
-    """
-    await ws_manager.connecter(user_id, websocket)
-    db = SessionLocal()
-
-    try:
-        # Badge initial dès la connexion
-        await ws_manager.envoyer_badge(user_id, db)
-
-        while True:
-            data = await websocket.receive_text()
-            if data == "ping":
-                await websocket.send_text(json.dumps({"type": "pong"}))
-
-    except WebSocketDisconnect:
-        ws_manager.deconnecter(user_id, websocket)
-
-    finally:
-        db.close()

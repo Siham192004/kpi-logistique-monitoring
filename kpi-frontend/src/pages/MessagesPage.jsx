@@ -35,24 +35,8 @@ const formatDateSeparator = (d) => {
   return date.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
 }
 
-// ── Composant point de présence ──
-const PresenceDot = ({ enLigne, style = {} }) => (
-  <span style={{
-    display: 'inline-block',
-    width: 8,
-    height: 8,
-    borderRadius: '50%',
-    backgroundColor: enLigne ? '#22c55e' : '#94a3b8',
-    flexShrink: 0,
-    boxShadow: enLigne ? '0 0 0 2px #dcfce7' : 'none',
-    transition: 'background-color 0.3s ease',
-    ...style,
-  }} title={enLigne ? 'En ligne' : 'Hors ligne'} />
-)
-
 export const MessagesPage = () => {
   const user = useAuthStore(state => state.user)
-  const presenceMap = useAuthStore(state => state.presenceMap)
 
   const [conversations, setConversations] = useState([])
   const [destinataires, setDestinataires] = useState([])
@@ -274,36 +258,17 @@ export const MessagesPage = () => {
             </div>
           ) : (
             conversations.map(conv => {
-              const enLigne = !!presenceMap[conv.autre_user_id]
               return (
                 <button
                   key={conv.autre_user_id}
                   className={`${styles.convItem} ${activeConv?.autre_user_id === conv.autre_user_id ? styles.activeConv : ''}`}
                   onClick={() => openConversation(conv)}
                 >
-                  <div className={styles.convAvatar} style={{ position: 'relative' }}>
-                    {conv.autre_prenom?.[0]}{conv.autre_nom?.[0]}
-                    {/* ✅ Point de présence sur l'avatar */}
-                    <PresenceDot enLigne={enLigne} style={{
-                      position: 'absolute',
-                      bottom: -1,
-                      right: -1,
-                      border: '1.5px solid var(--color-bg-primary, #fff)',
-                    }} />
-                    {conv.non_lus > 0 && <span className={styles.unreadDot} />}
-                  </div>
                   <div className={styles.convInfo}>
                     <div className={styles.convName}>
                       {/* ✅ Nom + statut texte */}
                       <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                         {conv.autre_prenom} {conv.autre_nom}
-                        <span style={{
-                          fontSize: 10,
-                          color: enLigne ? '#22c55e' : '#94a3b8',
-                          fontWeight: 500,
-                        }}>
-                          {enLigne ? 'en ligne' : 'hors ligne'}
-                        </span>
                       </span>
                       <span className={styles.convTime}>{formatDate(conv.dernier_message_date)}</span>
                     </div>
@@ -337,22 +302,11 @@ export const MessagesPage = () => {
                   <div className={styles.chatAvatar}>
                     {activeConv.autre_prenom?.[0]}{activeConv.autre_nom?.[0]}
                   </div>
-                  <PresenceDot
-                    enLigne={!!presenceMap[activeConv.autre_user_id]}
-                    style={{
-                      position: 'absolute',
-                      bottom: 0,
-                      right: 0,
-                      border: '2px solid var(--color-bg-primary, #fff)',
-                      width: 10,
-                      height: 10,
-                    }}
-                  />
+                
                 </div>
                 <div>
                   <p className={styles.chatName}>{activeConv.autre_prenom} {activeConv.autre_nom}</p>
-                  <p className={styles.chatRole} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                  </p>
+  
                 </div>
               </div>
 
@@ -441,12 +395,6 @@ export const MessagesPage = () => {
             onChange={e => setComposeForm({ ...composeForm, destinataire_id: e.target.value })}
           >
             <option value="">Sélectionner un destinataire</option>
-            {/* ✅ Point de présence dans le select du modal */}
-            {destinataires.map(d => (
-              <option key={d.id} value={d.id}>
-                {presenceMap[d.id] ? '🟢' : '⚫'} {d.prenom} {d.nom} — {d.nom_role}
-              </option>
-            ))}
           </Select>
           <Textarea
             label="Message"
