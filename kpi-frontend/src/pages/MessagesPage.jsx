@@ -14,16 +14,12 @@ const formatDate = (d) => {
   const date = new Date(d.endsWith('Z') ? d : d + 'Z')
   const now   = new Date()
   const diff  = now - date
-
   if (diff < 60000)    return "À l'instant"
   if (diff < 3600000)  return `${Math.floor(diff / 60000)} min`
-
   const isToday     = date.toDateString() === now.toDateString()
   const yesterday   = new Date(now); yesterday.setDate(now.getDate() - 1)
   const isYesterday = date.toDateString() === yesterday.toDateString()
-
   const time = date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
-
   if (isToday)     return time
   if (isYesterday) return `Hier ${time}`
   return date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' }) + ` ${time}`
@@ -34,14 +30,29 @@ const formatDateSeparator = (d) => {
   const date = new Date(d.endsWith('Z') ? d : d + 'Z')
   const now  = new Date()
   const yesterday = new Date(now); yesterday.setDate(now.getDate() - 1)
-
   if (date.toDateString() === now.toDateString())        return "Aujourd'hui"
   if (date.toDateString() === yesterday.toDateString())  return 'Hier'
   return date.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
 }
 
+// ── Composant point de présence ──
+const PresenceDot = ({ enLigne, style = {} }) => (
+  <span style={{
+    display: 'inline-block',
+    width: 8,
+    height: 8,
+    borderRadius: '50%',
+    backgroundColor: enLigne ? '#22c55e' : '#94a3b8',
+    flexShrink: 0,
+    boxShadow: enLigne ? '0 0 0 2px #dcfce7' : 'none',
+    transition: 'background-color 0.3s ease',
+    ...style,
+  }} title={enLigne ? 'En ligne' : 'Hors ligne'} />
+)
+
 export const MessagesPage = () => {
   const { user } = useAuthStore()
+  const { presenceMap } = useAuthStore()
 
   const [conversations, setConversations] = useState([])
   const [destinataires, setDestinataires] = useState([])
@@ -62,7 +73,6 @@ export const MessagesPage = () => {
 
   useEffect(() => { activeConvRef.current = activeConv }, [activeConv])
 
-  /* ── Charger les conversations ── */
   const loadConversations = useCallback(async (silent = false) => {
     if (!silent) setLoadingConvs(true)
     try {
@@ -72,19 +82,15 @@ export const MessagesPage = () => {
         apiFetch('/messages/destinataires'),
         apiFetch('/messages/badge'),
       ])
-
       const msgs    = convData.messages ?? convData ?? []
       const convMap = {}
-
       msgs.forEach(msg => {
         const isMine  = msg.expediteur_id === currentUserId
         const autreId = isMine ? msg.destinataire_id : msg.expediteur_id
         if (!autreId || autreId === currentUserId) return
-
         const autrePrenom = isMine ? msg.destinataire_prenom : msg.expediteur_prenom
         const autreNom    = isMine ? msg.destinataire_nom    : msg.expediteur_nom
         const cle         = [currentUserId, autreId].sort((a, b) => a - b).join('-')
-
         if (!convMap[cle]) {
           convMap[cle] = {
             autre_user_id:        autreId,
@@ -102,11 +108,9 @@ export const MessagesPage = () => {
         }
         if (!isMine && !msg.lu) convMap[cle].non_lus++
       })
-
       const convList = Object.values(convMap).sort(
         (a, b) => new Date(b.dernier_message_date) - new Date(a.dernier_message_date)
       )
-
       setConversations(convList)
       setBadge(b?.non_lus ?? 0)
       setDestinataires(
@@ -119,7 +123,6 @@ export const MessagesPage = () => {
     finally { setLoadingConvs(false) }
   }, [])
 
-  /* ── Charger les messages d'une conversation ── */
   const loadMessages = useCallback(async (autreUserId) => {
     if (!autreUserId) return
     try {
@@ -129,7 +132,6 @@ export const MessagesPage = () => {
     } catch (e) {}
   }, [])
 
-  /* ── Polling ── */
   useEffect(() => {
     loadConversations()
     pollingRef.current = setInterval(async () => {
@@ -141,12 +143,10 @@ export const MessagesPage = () => {
     return () => clearInterval(pollingRef.current)
   }, [])
 
-  /* ── Scroll automatique ── */
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  /* ── Ouvrir une conversation ── */
   const openConversation = async (conv) => {
     setActiveConv(conv)
     setConversations(prev =>
@@ -160,7 +160,6 @@ export const MessagesPage = () => {
     } catch (e) {}
   }
 
-  /* ── Envoyer un message ── */
   const handleSend = async () => {
     if (!newText.trim() || !activeConv) return
     setSending(true)
@@ -181,7 +180,6 @@ export const MessagesPage = () => {
     }
   }
 
-  /* ── Supprimer un message ── */
   const handleDelete = async (msgId) => {
     setDeletingId(msgId)
     try {
@@ -197,7 +195,6 @@ export const MessagesPage = () => {
     }
   }
 
-  /* ── Nouveau message (modal) ── */
   const handleCompose = async () => {
     if (!composeForm.destinataire_id || !composeForm.contenu.trim()) return
     setSending(true)
@@ -220,7 +217,6 @@ export const MessagesPage = () => {
     }
   }
 
-  /* ── Grouper les messages par date ── */
   const groupedMessages = () => {
     const groups = []
     let lastDate = null
@@ -252,7 +248,7 @@ export const MessagesPage = () => {
 
       <div className={styles.layout}>
 
-        {/* Liste des conversations */}
+        {/* ── Liste des conversations ── */}
         <div className={styles.convList}>
           <div className={styles.convListHeader}>
             <span className={styles.convListTitle}>Conversations</span>
@@ -274,32 +270,52 @@ export const MessagesPage = () => {
               </p>
             </div>
           ) : (
-            conversations.map(conv => (
-              <button
-                key={conv.autre_user_id}
-                className={`${styles.convItem} ${activeConv?.autre_user_id === conv.autre_user_id ? styles.activeConv : ''}`}
-                onClick={() => openConversation(conv)}
-              >
-                <div className={styles.convAvatar}>
-                  {conv.autre_prenom?.[0]}{conv.autre_nom?.[0]}
-                  {conv.non_lus > 0 && <span className={styles.unreadDot} />}
-                </div>
-                <div className={styles.convInfo}>
-                  <div className={styles.convName}>
-                    <span>{conv.autre_prenom} {conv.autre_nom}</span>
-                    <span className={styles.convTime}>{formatDate(conv.dernier_message_date)}</span>
+            conversations.map(conv => {
+              const enLigne = !!presenceMap[conv.autre_user_id]
+              return (
+                <button
+                  key={conv.autre_user_id}
+                  className={`${styles.convItem} ${activeConv?.autre_user_id === conv.autre_user_id ? styles.activeConv : ''}`}
+                  onClick={() => openConversation(conv)}
+                >
+                  <div className={styles.convAvatar} style={{ position: 'relative' }}>
+                    {conv.autre_prenom?.[0]}{conv.autre_nom?.[0]}
+                    {/* ✅ Point de présence sur l'avatar */}
+                    <PresenceDot enLigne={enLigne} style={{
+                      position: 'absolute',
+                      bottom: -1,
+                      right: -1,
+                      border: '1.5px solid var(--color-bg-primary, #fff)',
+                    }} />
+                    {conv.non_lus > 0 && <span className={styles.unreadDot} />}
                   </div>
-                  <p className={styles.convPreview}>{conv.dernier_message || 'Aucun message'}</p>
-                  {conv.non_lus > 0 && (
-                    <span className={styles.unreadCount}>{conv.non_lus}</span>
-                  )}
-                </div>
-              </button>
-            ))
+                  <div className={styles.convInfo}>
+                    <div className={styles.convName}>
+                      {/* ✅ Nom + statut texte */}
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                        {conv.autre_prenom} {conv.autre_nom}
+                        <span style={{
+                          fontSize: 10,
+                          color: enLigne ? '#22c55e' : '#94a3b8',
+                          fontWeight: 500,
+                        }}>
+                          {enLigne ? 'en ligne' : 'hors ligne'}
+                        </span>
+                      </span>
+                      <span className={styles.convTime}>{formatDate(conv.dernier_message_date)}</span>
+                    </div>
+                    <p className={styles.convPreview}>{conv.dernier_message || 'Aucun message'}</p>
+                    {conv.non_lus > 0 && (
+                      <span className={styles.unreadCount}>{conv.non_lus}</span>
+                    )}
+                  </div>
+                </button>
+              )
+            })
           )}
         </div>
 
-        {/* Zone de chat */}
+        {/* ── Zone de chat ── */}
         <div className={styles.chatArea}>
           {!activeConv ? (
             <div className={styles.chatEmpty}>
@@ -312,13 +328,38 @@ export const MessagesPage = () => {
             </div>
           ) : (
             <>
+              {/* ✅ Header avec présence */}
               <div className={styles.chatHeader}>
-                <div className={styles.chatAvatar}>
-                  {activeConv.autre_prenom?.[0]}{activeConv.autre_nom?.[0]}
+                <div style={{ position: 'relative', display: 'inline-flex' }}>
+                  <div className={styles.chatAvatar}>
+                    {activeConv.autre_prenom?.[0]}{activeConv.autre_nom?.[0]}
+                  </div>
+                  <PresenceDot
+                    enLigne={!!presenceMap[activeConv.autre_user_id]}
+                    style={{
+                      position: 'absolute',
+                      bottom: 0,
+                      right: 0,
+                      border: '2px solid var(--color-bg-primary, #fff)',
+                      width: 10,
+                      height: 10,
+                    }}
+                  />
                 </div>
                 <div>
                   <p className={styles.chatName}>{activeConv.autre_prenom} {activeConv.autre_nom}</p>
-                  <p className={styles.chatRole}>{activeConv.autre_role}</p>
+                  <p className={styles.chatRole} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                    {/* ✅ Statut en ligne sous le nom */}
+                    <span style={{
+                      display: 'inline-block',
+                      width: 6,
+                      height: 6,
+                      borderRadius: '50%',
+                      backgroundColor: presenceMap[activeConv.autre_user_id] ? '#22c55e' : '#94a3b8',
+                    }} />
+                    {presenceMap[activeConv.autre_user_id] ? 'En ligne' : 'Hors ligne'}
+                    {activeConv.autre_role && <span style={{ color: 'var(--color-text-tertiary)' }}> · {activeConv.autre_role}</span>}
+                  </p>
                 </div>
               </div>
 
@@ -336,10 +377,8 @@ export const MessagesPage = () => {
                         </div>
                       )
                     }
-
                     const msg    = item.msg
                     const isMine = msg.expediteur_id === currentUserId
-
                     return (
                       <div
                         key={item.key}
@@ -348,7 +387,6 @@ export const MessagesPage = () => {
                         onMouseEnter={() => setHoveredMsg(msg.id)}
                         onMouseLeave={() => setHoveredMsg(null)}
                       >
-                        {/* Bouton supprimer — uniquement mes messages */}
                         {isMine && hoveredMsg === msg.id && (
                           <button
                             className={styles.deleteBtn}
@@ -359,7 +397,6 @@ export const MessagesPage = () => {
                             <Trash2 size={13} />
                           </button>
                         )}
-
                         <div className={styles.msgBubble}>
                           <p className={styles.msgText}>{msg.contenu}</p>
                           <span className={styles.msgTime}>{formatDate(msg.date_envoi)}</span>
@@ -411,8 +448,11 @@ export const MessagesPage = () => {
             onChange={e => setComposeForm({ ...composeForm, destinataire_id: e.target.value })}
           >
             <option value="">Sélectionner un destinataire</option>
+            {/* ✅ Point de présence dans le select du modal */}
             {destinataires.map(d => (
-              <option key={d.id} value={d.id}>{d.prenom} {d.nom} — {d.nom_role}</option>
+              <option key={d.id} value={d.id}>
+                {presenceMap[d.id] ? '🟢' : '⚫'} {d.prenom} {d.nom} — {d.nom_role}
+              </option>
             ))}
           </Select>
           <Textarea

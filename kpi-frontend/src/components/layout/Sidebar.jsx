@@ -50,12 +50,21 @@ export const Sidebar = () => {
       }, 30000)
     }
 
-    ws.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data)
-        if (data.type === 'badge') setMsgBadge(data.non_lus || 0)
+// Dans le useEffect, remplacer ws.onmessage :
+   ws.onmessage = (event) => {
+     try {
+       const data = JSON.parse(event.data)
+       if (data.type === 'badge') {
+         setMsgBadge(data.non_lus || 0)
+      }
+       if (data.type === 'presence') {
+         useAuthStore.getState().setUserPresence(data.user_id, data.en_ligne)
+      }
+       if (data.type === 'presence_snapshot') {
+         useAuthStore.getState().setPresenceSnapshot(data.users_en_ligne)
+       }
       } catch {}
-    }
+}
 
     ws.onclose = () => {
       clearInterval(ping)

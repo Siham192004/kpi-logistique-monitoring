@@ -3,10 +3,25 @@ import { create } from 'zustand'
 const API_BASE = '/api'
 
 export const useAuthStore = create((set, get) => ({
-  user:      null,
-  token:     localStorage.getItem('kpi_token'),
-  isLoading: false,
-  error:     null,
+  user:        null,
+  token:       localStorage.getItem('kpi_token'),
+  isLoading:   false,
+  error:       null,
+
+  // ✅ Présence — intégré directement ici
+  presenceMap: {}, // { [user_id]: true/false }
+
+  setUserPresence: (userId, enLigne) =>
+    set(state => ({
+      presenceMap: { ...state.presenceMap, [userId]: enLigne }
+    })),
+
+  setPresenceSnapshot: (userIds) =>
+    set(state => {
+      const map = { ...state.presenceMap }
+      userIds.forEach(id => { map[id] = true })
+      return { presenceMap: map }
+    }),
 
   login: async (login, password) => {
     set({ isLoading: true, error: null })
@@ -42,7 +57,7 @@ export const useAuthStore = create((set, get) => ({
 
   logout: () => {
     localStorage.removeItem('kpi_token')
-    set({ user: null, token: null })
+    set({ user: null, token: null, presenceMap: {} }) // ✅ reset présence au logout
   },
 
   setUser: (user) => set({ user }),
