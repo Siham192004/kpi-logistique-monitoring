@@ -35,6 +35,7 @@ const formatDateSeparator = (d) => {
   return date.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
 }
 
+// ── Composant point de présence ──
 const PresenceDot = ({ enLigne, style = {} }) => (
   <span style={{
     display: 'inline-block',
@@ -50,9 +51,8 @@ const PresenceDot = ({ enLigne, style = {} }) => (
 )
 
 export const MessagesPage = () => {
-  const user        = useAuthStore(state => state.user)
+  const user = useAuthStore(state => state.user)
   const presenceMap = useAuthStore(state => state.presenceMap)
-  const badge       = useAuthStore(state => state.msgBadge)
 
   const [conversations, setConversations] = useState([])
   const [destinataires, setDestinataires] = useState([])
@@ -62,6 +62,7 @@ export const MessagesPage = () => {
   const [sending, setSending]             = useState(false)
   const [composeOpen, setComposeOpen]     = useState(false)
   const [composeForm, setComposeForm]     = useState({ destinataire_id: '', contenu: '' })
+  const badge                             = useAuthStore(state => state.msgBadge)
   const [loadingConvs, setLoadingConvs]   = useState(true)
   const [hoveredMsg, setHoveredMsg]       = useState(null)
   const [deletingId, setDeletingId]       = useState(null)
@@ -75,9 +76,10 @@ export const MessagesPage = () => {
     if (!silent) setLoadingConvs(true)
     try {
       const currentUserId = useAuthStore.getState().user?.id
-      const [convData, dests] = await Promise.all([
+      const [convData, dests, b] = await Promise.all([
         apiFetch('/messages/'),
         apiFetch('/messages/destinataires'),
+        apiFetch('/messages/badge'),
       ])
       const msgs    = convData.messages ?? convData ?? []
       const convMap = {}
@@ -128,22 +130,13 @@ export const MessagesPage = () => {
     } catch (e) {}
   }, [])
 
-  useEffect(() => { loadConversations() }, [])
+  useEffect(() => {
+    loadConversations()
+  }, [])
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
-
-  useEffect(() => {
-    const handleNouveauMessage = async () => {
-      await loadConversations(true)
-      if (activeConvRef.current?.autre_user_id) {
-        await loadMessages(activeConvRef.current.autre_user_id)
-      }
-    }
-    window.addEventListener('nouveau_message', handleNouveauMessage)
-    return () => window.removeEventListener('nouveau_message', handleNouveauMessage)
-  }, [loadConversations, loadMessages])
 
   const openConversation = async (conv) => {
     setActiveConv(conv)
@@ -175,6 +168,20 @@ export const MessagesPage = () => {
       setSending(false)
     }
   }
+
+  useEffect(() => {
+    const handleNouveauMessage = async () => {
+        // Recharger les conversations
+        await loadConversations(true)
+        // Si une conversation est ouverte, recharger les messages
+        if (activeConvRef.current?.autre_user_id) {
+            await loadMessages(activeConvRef.current.autre_user_id)
+        }
+    }
+
+    window.addEventListener('nouveau_message', handleNouveauMessage)
+    return () => window.removeEventListener('nouveau_message', handleNouveauMessage)
+}, [loadConversations, loadMessages])
 
   const handleDelete = async (msgId) => {
     setDeletingId(msgId)
@@ -217,9 +224,7 @@ export const MessagesPage = () => {
     const groups = []
     let lastDate = null
     messages.forEach((msg, i) => {
-      const d = msg.date_envoi
-        ? new Date(msg.date_envoi.endsWith('Z') ? msg.date_envoi : msg.date_envoi + 'Z')
-        : null
+      const d = msg.date_envoi ? new Date(msg.date_envoi.endsWith('Z') ? msg.date_envoi : msg.date_envoi + 'Z') : null
       const dateStr = d ? d.toDateString() : null
       if (dateStr && dateStr !== lastDate) {
         groups.push({ type: 'separator', label: formatDateSeparator(msg.date_envoi), key: `sep-${i}` })
@@ -231,11 +236,6 @@ export const MessagesPage = () => {
   }
 
   const currentUserId = user?.id
-
-  // Utilisateurs en ligne (hors soi-même)
-  const usersEnLigne = destinataires.filter(
-    d => presenceMap[d.id] && d.id !== currentUserId
-  )
 
   return (
     <AppLayout>
@@ -264,109 +264,57 @@ export const MessagesPage = () => {
               <div className={styles.convSkeleton} />
               <div className={styles.convSkeleton} />
             </div>
+          ) : conversations.length === 0 ? (
+            <div className={styles.emptyConv}>
+              <MessageSquare size={24} />
+              <p>Aucune conversation</p>
+              <p style={{ fontSize: 11, color: 'var(--color-text-tertiary)', marginTop: 4 }}>
+                Cliquez sur "Nouveau" pour démarrer
+              </p>
+            </div>
           ) : (
-            <>
-              {/* ── En ligne maintenant ── */}
-              {usersEnLigne.length > 0 && (
-                <div>
-                  <div className={styles.convListHeader} style={{ marginTop: 8, marginBottom: 4 }}>
-                    <span className={styles.convListTitle} style={{ color: '#22c55e', fontSize: 11 }}>
-                      ● En ligne maintenant
-                    </span>
-                    <span className={styles.convCount} style={{ background: '#22c55e22', color: '#22c55e' }}>
-                      {usersEnLigne.length}
-                    </span>
+            conversations.map(conv => {
+              const enLigne = !!presenceMap[conv.autre_user_id]
+              return (
+                <button
+                  key={conv.autre_user_id}
+                  className={`${styles.convItem} ${activeConv?.autre_user_id === conv.autre_user_id ? styles.activeConv : ''}`}
+                  onClick={() => openConversation(conv)}
+                >
+                  <div className={styles.convAvatar} style={{ position: 'relative' }}>
+                    {conv.autre_prenom?.[0]}{conv.autre_nom?.[0]}
+                    {/* ✅ Point de présence sur l'avatar */}
+                    <PresenceDot enLigne={enLigne} style={{
+                      position: 'absolute',
+                      bottom: -1,
+                      right: -1,
+                      border: '1.5px solid var(--color-bg-primary, #fff)',
+                    }} />
+                    {conv.non_lus > 0 && <span className={styles.unreadDot} />}
                   </div>
-                  {usersEnLigne.map(d => (
-                    <button
-                      key={`online-${d.id}`}
-                      className={`${styles.convItem} ${activeConv?.autre_user_id === d.id ? styles.activeConv : ''}`}
-                      onClick={() => {
-                        const existante = conversations.find(c => c.autre_user_id === d.id)
-                        if (existante) {
-                          openConversation(existante)
-                        } else {
-                          openConversation({
-                            autre_user_id:        d.id,
-                            autre_prenom:         d.prenom,
-                            autre_nom:            d.nom,
-                            dernier_message:      '',
-                            dernier_message_date: null,
-                            non_lus:              0,
-                          })
-                        }
-                      }}
-                    >
-                      <div className={styles.convAvatar} style={{ position: 'relative' }}>
-                        {d.prenom?.[0]}{d.nom?.[0]}
-                        <PresenceDot enLigne={true} style={{
-                          position: 'absolute', bottom: -1, right: -1,
-                          border: '1.5px solid var(--color-bg-primary, #fff)',
-                        }} />
-                      </div>
-                      <div className={styles.convInfo}>
-                        <div className={styles.convName}>
-                          <span>{d.prenom} {d.nom}</span>
-                        </div>
-                        <p className={styles.convPreview} style={{ color: '#22c55e', fontSize: 11 }}>
-                          En ligne maintenant
-                        </p>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              {/* ── Conversations existantes ── */}
-              {conversations.length === 0 ? (
-                <div className={styles.emptyConv}>
-                  <MessageSquare size={24} />
-                  <p>Aucune conversation</p>
-                  <p style={{ fontSize: 11, color: 'var(--color-text-tertiary)', marginTop: 4 }}>
-                    Cliquez sur "Nouveau" pour démarrer
-                  </p>
-                </div>
-              ) : (
-                conversations.map(conv => {
-                  const enLigne = !!presenceMap[conv.autre_user_id]
-                  return (
-                    <button
-                      key={conv.autre_user_id}
-                      className={`${styles.convItem} ${activeConv?.autre_user_id === conv.autre_user_id ? styles.activeConv : ''}`}
-                      onClick={() => openConversation(conv)}
-                    >
-                      <div className={styles.convAvatar} style={{ position: 'relative' }}>
-                        {conv.autre_prenom?.[0]}{conv.autre_nom?.[0]}
-                        <PresenceDot enLigne={enLigne} style={{
-                          position: 'absolute', bottom: -1, right: -1,
-                          border: '1.5px solid var(--color-bg-primary, #fff)',
-                        }} />
-                        {conv.non_lus > 0 && <span className={styles.unreadDot} />}
-                      </div>
-                      <div className={styles.convInfo}>
-                        <div className={styles.convName}>
-                          <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                            {conv.autre_prenom} {conv.autre_nom}
-                            <span style={{
-                              fontSize: 10,
-                              color: enLigne ? '#22c55e' : '#94a3b8',
-                              fontWeight: 500,
-                            }}>
-                              {enLigne ? 'en ligne' : 'hors ligne'}
-                            </span>
-                          </span>
-                          <span className={styles.convTime}>{formatDate(conv.dernier_message_date)}</span>
-                        </div>
-                        <p className={styles.convPreview}>{conv.dernier_message || 'Aucun message'}</p>
-                        {conv.non_lus > 0 && (
-                          <span className={styles.unreadCount}>{conv.non_lus}</span>
-                        )}
-                      </div>
-                    </button>
-                  )
-                })
-              )}
-            </>
+                  <div className={styles.convInfo}>
+                    <div className={styles.convName}>
+                      {/* ✅ Nom + statut texte */}
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                        {conv.autre_prenom} {conv.autre_nom}
+                        <span style={{
+                          fontSize: 10,
+                          color: enLigne ? '#22c55e' : '#94a3b8',
+                          fontWeight: 500,
+                        }}>
+                          {enLigne ? 'en ligne' : 'hors ligne'}
+                        </span>
+                      </span>
+                      <span className={styles.convTime}>{formatDate(conv.dernier_message_date)}</span>
+                    </div>
+                    <p className={styles.convPreview}>{conv.dernier_message || 'Aucun message'}</p>
+                    {conv.non_lus > 0 && (
+                      <span className={styles.unreadCount}>{conv.non_lus}</span>
+                    )}
+                  </div>
+                </button>
+              )
+            })
           )}
         </div>
 
@@ -383,6 +331,7 @@ export const MessagesPage = () => {
             </div>
           ) : (
             <>
+              {/* ✅ Header avec présence */}
               <div className={styles.chatHeader}>
                 <div style={{ position: 'relative', display: 'inline-flex' }}>
                   <div className={styles.chatAvatar}>
@@ -391,23 +340,18 @@ export const MessagesPage = () => {
                   <PresenceDot
                     enLigne={!!presenceMap[activeConv.autre_user_id]}
                     style={{
-                      position: 'absolute', bottom: 0, right: 0,
+                      position: 'absolute',
+                      bottom: 0,
+                      right: 0,
                       border: '2px solid var(--color-bg-primary, #fff)',
-                      width: 10, height: 10,
+                      width: 10,
+                      height: 10,
                     }}
                   />
                 </div>
                 <div>
                   <p className={styles.chatName}>{activeConv.autre_prenom} {activeConv.autre_nom}</p>
                   <p className={styles.chatRole} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                    <span style={{
-                      display: 'inline-block', width: 6, height: 6, borderRadius: '50%',
-                      backgroundColor: presenceMap[activeConv.autre_user_id] ? '#22c55e' : '#94a3b8',
-                    }} />
-                    {presenceMap[activeConv.autre_user_id] ? 'En ligne' : 'Hors ligne'}
-                    {activeConv.autre_role && (
-                      <span style={{ color: 'var(--color-text-tertiary)' }}> · {activeConv.autre_role}</span>
-                    )}
                   </p>
                 </div>
               </div>
@@ -497,6 +441,7 @@ export const MessagesPage = () => {
             onChange={e => setComposeForm({ ...composeForm, destinataire_id: e.target.value })}
           >
             <option value="">Sélectionner un destinataire</option>
+            {/* ✅ Point de présence dans le select du modal */}
             {destinataires.map(d => (
               <option key={d.id} value={d.id}>
                 {presenceMap[d.id] ? '🟢' : '⚫'} {d.prenom} {d.nom} — {d.nom_role}

@@ -423,19 +423,19 @@ const handleExportExcel = async () => {
             {errors.carrier && <span className={styles.fieldError}>{errors.carrier}</span>}
           </div>
           <div className={styles.fieldWrap}>
-            <Input label="Navire *" value={form.vessel_nom} onChange={e => f('vessel_nom', e.target.value)} placeholder="Nom du navire" error={errors.vessel_nom} />
+            <Input label="Navire *" value={form.vessel_nom} onChange={e => f('vessel_nom', e.target.value)} placeholder="Nom du navire" />
             {errors.vessel_nom && <span className={styles.fieldError}>{errors.vessel_nom}</span>}
           </div>
           <div className={styles.fieldWrap}>
-            <Input label="Port de chargement *" value={form.port_chargement} onChange={e => f('port_chargement', e.target.value)} error={errors.port_chargement} />
+            <Input label="Port de chargement *" value={form.port_chargement} onChange={e => f('port_chargement', e.target.value)}  />
             {errors.port_chargement && <span className={styles.fieldError}>{errors.port_chargement}</span>}
           </div>
           <div className={styles.fieldWrap}>
-            <Input label="Port de déchargement *" value={form.port_dechargement} onChange={e => f('port_dechargement', e.target.value)} error={errors.port_dechargement} />
+            <Input label="Port de déchargement *" value={form.port_dechargement} onChange={e => f('port_dechargement', e.target.value)} />
             {errors.port_dechargement && <span className={styles.fieldError}>{errors.port_dechargement}</span>}
           </div>
           <div className={styles.fieldWrap}>
-            <Input label="Pays destination *" value={form.pays_destination} onChange={e => f('pays_destination', e.target.value)} error={errors.pays_destination} />
+            <Input label="Pays destination *" value={form.pays_destination} onChange={e => f('pays_destination', e.target.value)}  />
             {errors.pays_destination && <span className={styles.fieldError}>{errors.pays_destination}</span>}
           </div>
           <Select label="Statut" value={form.shipment_status} onChange={e => f('shipment_status', e.target.value)}>
@@ -443,17 +443,17 @@ const handleExportExcel = async () => {
             <option value="Cancelled">Cancelled</option>
           </Select>
           <div className={styles.fieldWrap}>
-            <Input label="ETD *" type="date" value={form.etd} onChange={e => f('etd', e.target.value)} error={errors.etd} />
+            <Input label="ETD *" type="date" value={form.etd} onChange={e => f('etd', e.target.value)} />
             {errors.etd && <span className={styles.fieldError}>{errors.etd}</span>}
           </div>
           <div className={styles.fieldWrap}>
-            <Input label="ETA *" type="date" value={form.eta} onChange={e => f('eta', e.target.value)} error={errors.eta} />
+            <Input label="ETA *" type="date" value={form.eta} onChange={e => f('eta', e.target.value)}  />
             {errors.eta && <span className={styles.fieldError}>{errors.eta}</span>}
           </div>
           <Input label="ATD" type="date" value={form.atd} onChange={e => f('atd', e.target.value)} />
           <Input label="ATA" type="date" value={form.ata} onChange={e => f('ata', e.target.value)} />
           <div className={styles.fieldWrap}>
-            <Input label="Volume réservé *" type="number" min="0.001" step="any" value={form.volume_booked} onChange={e => f('volume_booked', e.target.value)} error={errors.volume_booked} />
+            <Input label="Volume réservé *" type="number" min="0.001" step="any" value={form.volume_booked} onChange={e => f('volume_booked', e.target.value)}  />
             {errors.volume_booked && <span className={styles.fieldError}>{errors.volume_booked}</span>}
           </div>
           <div className={styles.fieldWrap}>
@@ -465,7 +465,7 @@ const handleExportExcel = async () => {
             {errors.charged_volume && <span className={styles.fieldError}>{errors.charged_volume}</span>}
           </div>
           <div className={styles.fieldWrap}>
-            <Input label="Transit time (jours) *" type="number" value={form.transit_time} onChange={e => f('transit_time', e.target.value)} error={errors.transit_time} />
+            <Input label="Transit time (jours) *" type="number" value={form.transit_time} onChange={e => f('transit_time', e.target.value)}  />
             {errors.transit_time && <span className={styles.fieldError}>{errors.transit_time}</span>}
           </div>
           <div className={styles.fieldWrap}>
@@ -476,7 +476,7 @@ const handleExportExcel = async () => {
             {errors.incoterm && <span className={styles.fieldError}>{errors.incoterm}</span>}
           </div>
           <div className={styles.fieldWrap}>
-            <Input label="Fréquence *" value={form.frequency} onChange={e => f('frequency', e.target.value)} placeholder="ex: 7j, 14j, 30j" error={errors.frequency} />
+            <Input label="Fréquence *" value={form.frequency} onChange={e => f('frequency', e.target.value)} placeholder="ex: 7j, 14j, 30j"  />
             {errors.frequency && <span className={styles.fieldError}>{errors.frequency}</span>}
             <span className={styles.fieldHint}>Format requis : nombre suivi de "j" — ex: 7j</span>
           </div>

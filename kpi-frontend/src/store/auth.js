@@ -9,21 +9,8 @@ export const useAuthStore = create((set, get) => ({
   error:       null,
 
   // ✅ Présence — intégré directement ici
-  presenceMap: {}, // { [user_id]: true/false }
   msgBadge: 0,
   setMsgBadge: (n) => set({ msgBadge: n }),
-
-  setUserPresence: (userId, enLigne) =>
-    set(state => ({
-      presenceMap: { ...state.presenceMap, [userId]: enLigne }
-    })),
-
-  setPresenceSnapshot: (userIds) =>
-  set(() => {
-    const map = {}
-    userIds.forEach(id => { map[id] = true })
-    return { presenceMap: map }
-  }),
 
   login: async (login, password) => {
     set({ isLoading: true, error: null })
