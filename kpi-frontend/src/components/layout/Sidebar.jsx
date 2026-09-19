@@ -40,8 +40,18 @@ export const Sidebar = () => {
   let reconnectTimeout = null
 
   const connect = () => {
-    const token = localStorage.getItem('kpi_token')  // ← ajouter
-    ws = new WebSocket(`ws://localhost:8000/api/messages/ws/${user.id}?token=${token}`)
+    const token = localStorage.getItem('kpi_token')
+    
+    // ← Lire le user DIRECTEMENT depuis le store au moment de la connexion
+    const currentUser = useAuthStore.getState().user
+    
+    if (!currentUser?.id) return  // sécurité
+    
+    console.log('Connecting WS for user:', currentUser.id)  // debug
+    
+    ws = new WebSocket(
+        `ws://localhost:3000/api/messages/ws/${currentUser.id}?token=${token}`
+    )
 
     ws.onopen = () => {
       // Ping toutes les 30s pour garder la connexion vivante
