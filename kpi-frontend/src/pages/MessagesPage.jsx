@@ -269,6 +269,7 @@ export const MessagesPage = () => {
                       {/* ✅ Nom + statut texte */}
                       <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                         {conv.autre_prenom} {conv.autre_nom}
+                      
                       </span>
                       <span className={styles.convTime}>{formatDate(conv.dernier_message_date)}</span>
                     </div>
@@ -306,7 +307,8 @@ export const MessagesPage = () => {
                 </div>
                 <div>
                   <p className={styles.chatName}>{activeConv.autre_prenom} {activeConv.autre_nom}</p>
-  
+                  <p className={styles.chatRole} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                  </p>
                 </div>
               </div>
 
@@ -398,7 +400,7 @@ export const MessagesPage = () => {
             {/* ✅ Point de présence dans le select du modal */}
             {destinataires.map(d => (
               <option key={d.id} value={d.id}>
-
+                 {d.prenom} {d.nom} — {d.nom_role}
               </option>
             ))}
           </Select>
