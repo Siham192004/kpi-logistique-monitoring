@@ -327,6 +327,23 @@ def get_badge(db: Session, user_id: int) -> BadgeSchema:
     return BadgeSchema(non_lus=non_lus)
 
 
+async def notifier_nouveau_message(self, destinataire_id: int, db: Session):
+    # Badge
+    await self.envoyer_badge(destinataire_id, db)
+    
+    # ← AJOUTER : notifier qu'il y a un nouveau message
+    if destinataire_id in self.connexions:
+        payload = json.dumps({"type": "nouveau_message"})
+        connexions_mortes = set()
+        for ws in self.connexions[destinataire_id]:
+            try:
+                await ws.send_text(payload)
+            except Exception:
+                connexions_mortes.add(ws)
+        for ws in connexions_mortes:
+            self.connexions[destinataire_id].discard(ws)
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # WEBSOCKET — CONNEXION TEMPS RÉEL
 # ═══════════════════════════════════════════════════════════════════════════════

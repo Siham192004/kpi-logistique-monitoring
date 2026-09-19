@@ -170,6 +170,20 @@ export const MessagesPage = () => {
     }
   }
 
+  useEffect(() => {
+    const handleNouveauMessage = async () => {
+        // Recharger les conversations
+        await loadConversations(true)
+        // Si une conversation est ouverte, recharger les messages
+        if (activeConvRef.current?.autre_user_id) {
+            await loadMessages(activeConvRef.current.autre_user_id)
+        }
+    }
+
+    window.addEventListener('nouveau_message', handleNouveauMessage)
+    return () => window.removeEventListener('nouveau_message', handleNouveauMessage)
+}, [loadConversations, loadMessages])
+
   const handleDelete = async (msgId) => {
     setDeletingId(msgId)
     try {

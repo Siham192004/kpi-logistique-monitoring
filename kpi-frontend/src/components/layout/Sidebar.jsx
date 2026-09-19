@@ -62,18 +62,22 @@ export const Sidebar = () => {
 
 // Dans le useEffect, remplacer ws.onmessage :
    ws.onmessage = (event) => {
-     try {
-       const data = JSON.parse(event.data)
-       if (data.type === 'badge') {
-         setMsgBadge(data.non_lus || 0)
-      }
-       if (data.type === 'presence') {
-         useAuthStore.getState().setUserPresence(data.user_id, data.en_ligne)
-      }
-       if (data.type === 'presence_snapshot') {
-         useAuthStore.getState().setPresenceSnapshot(data.users_en_ligne)
-       }
-      } catch {}
+    try {
+        const data = JSON.parse(event.data)
+        if (data.type === 'badge') {
+            setMsgBadge(data.non_lus || 0)
+        }
+        if (data.type === 'nouveau_message') {
+            // Déclencher un événement custom pour que MessagesPage recharge
+            window.dispatchEvent(new CustomEvent('nouveau_message'))
+        }
+        if (data.type === 'presence') {
+            useAuthStore.getState().setUserPresence(data.user_id, data.en_ligne)
+        }
+        if (data.type === 'presence_snapshot') {
+            useAuthStore.getState().setPresenceSnapshot(data.users_en_ligne)
+        }
+    } catch {}
 }
 
     ws.onclose = () => {
