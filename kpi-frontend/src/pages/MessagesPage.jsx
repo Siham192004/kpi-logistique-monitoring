@@ -133,13 +133,6 @@ export const MessagesPage = () => {
 
   useEffect(() => {
     loadConversations()
-    pollingRef.current = setInterval(async () => {
-      await loadConversations(true)
-      if (activeConvRef.current?.autre_user_id) {
-        await loadMessages(activeConvRef.current.autre_user_id)
-      }
-    }, 5000)
-    return () => clearInterval(pollingRef.current)
   }, [])
 
   useEffect(() => {
