@@ -31,7 +31,7 @@ import warnings
 import numpy as np
 import pandas as pd
 from dateutil import parser as dateutil_parser
-from engine.weather_client import enrich_dataset_with_weather
+#from engine.weather_client import enrich_dataset_with_weather
 
 
 warnings.filterwarnings("ignore")

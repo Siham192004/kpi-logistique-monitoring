@@ -19,15 +19,16 @@ from sqlalchemy.orm import (
 
 load_dotenv()
 
-DB_PATH      = Path("data/logistique.db")
-DATABASE_URL = f"sqlite:///{DB_PATH}"
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./data/logistique.db")
 
-engine = create_engine(
-    DATABASE_URL,
-    connect_args={"check_same_thread": False},
-    echo=False,
-)
-
+if DATABASE_URL.startswith("sqlite"):
+    engine = create_engine(
+        DATABASE_URL,
+        connect_args={"check_same_thread": False},
+        echo=False,
+    )
+else:
+    engine = create_engine(DATABASE_URL, echo=False)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
@@ -115,7 +116,8 @@ def get_db():
 
 
 def init_db():
-    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    if DATABASE_URL.startswith("sqlite"):
+        Path("data").mkdir(parents=True, exist_ok=True)
     Base.metadata.create_all(bind=engine)
     print("✅ Base de données initialisée avec succès.")
 
@@ -349,7 +351,7 @@ if __name__ == "__main__":
     init_db()
     inserer_donnees_initiales()
     charger_donnees_historiques()
-    print(f"\n✅ Initialisation complète ! Base : {DB_PATH}")
+    print(f"\n✅ Initialisation complète ! Base : {DATABASE_URL}")
 
     db: Session = SessionLocal()
     try:
