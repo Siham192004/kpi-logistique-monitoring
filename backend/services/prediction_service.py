@@ -1,20 +1,4 @@
-"""
-prediction_service.py — Logique métier : prédiction de retard ML
 
-Responsabilités :
-1. Récupérer le shipment depuis la DB
-2. Vérifier qu'il est éligible à la prédiction
-3. Appeler predire_retard() depuis Regression_logistique.py
-4. Formater la réponse pour le schema Pydantic
-
-Architecture :
-prediction_router → prediction_service → shipment_repository → SessionLocal
-                                       ↘ engine/Regression_logistique.py (ML)
-
-Note :
-get_shipment_by_id() retourne un dict (via _shipment_to_dict),
-pas un objet ORM. Tous les accès sont donc en notation dict : shipment["champ"].
-"""
 
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session

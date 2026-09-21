@@ -58,7 +58,7 @@ logger = logging.getLogger(__name__)
 
 # ── Chemins ───────────────────────────────────────────────────────────────────
 DB_PATH    = Path("data/Logistique.db")
-MODEL_PATH = Path("models/regression_logistique.pkl")
+MODEL_PATH = Path("models/regression_logistique.joblib")
 MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 # ── Features ──────────────────────────────────────────────────────────────────

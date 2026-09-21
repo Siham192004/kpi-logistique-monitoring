@@ -1,13 +1,4 @@
-"""
-prediction_router.py — Routes HTTP : prédiction de retard ML
 
-Routes accessibles Opérateur ET Manager :
-    GET  /predict/eligibles     → liste des shipments éligibles à la prédiction
-    POST /predict/              → prédire le retard d'un shipment
-
-Architecture :
-prediction_router → prediction_service → shipment_repository + Random_forest → db.py
-"""
 
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
