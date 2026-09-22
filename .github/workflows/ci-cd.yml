@@ -31,7 +31,7 @@ jobs:
         run: |
           echo "Attente du backend..."
           for i in {1..30}; do
-            if curl -sf http://localhost:8000/; then
+            if curl -sf "https://kpi-backend-latest.onrender.com"; then
               echo "✅ Backend prêt !"
               break
             fi
@@ -40,7 +40,7 @@ jobs:
           done
 
       - name: Tester le backend
-        run: curl -f http://localhost:8000/
+        run: curl -f "https://kpi-backend-latest.onrender.com"
 
       - name: Arrêter les conteneurs
         run: docker compose down

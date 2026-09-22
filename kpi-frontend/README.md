@@ -19,7 +19,7 @@ npm install
 npm run dev
 ```
 
-L'application tourne sur http://localhost:3000 et proxifie `/api` vers `http://localhost:8000`.
+L'application tourne sur http://localhost:3000 et proxifie `/api` vers `https://kpi-backend-latest.onrender.com`.
 
 ## Build production
 
