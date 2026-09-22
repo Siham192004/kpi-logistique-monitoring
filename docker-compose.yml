@@ -1,3 +1,5 @@
+version: '3.8'
+
 services:
 
   backend:
@@ -9,17 +11,11 @@ services:
     volumes:
       - ./data:/app/data
     env_file:
-      - .env
+      - .env 
     environment:
       - PYTHONPATH=/app
     networks:
       - kpi-network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 40s
 
   frontend:
     build:
@@ -28,8 +24,7 @@ services:
     ports:
       - "3000:80"
     depends_on:
-      backend:
-        condition: service_healthy
+      - backend
     networks:
       - kpi-network
 
