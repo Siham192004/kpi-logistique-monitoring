@@ -35,6 +35,10 @@ jobs:
         if: always()
         run: docker compose logs --tail=200 backend
 
+      - name: Inspecter le healthcheck
+        if: always()
+        run: docker inspect kpi-logistique-monitoring-backend-1 --format='{{json .State.Health}}'
+
       - name: Attendre que le backend soit prêt
         run: |
           echo "Attente du backend..."
