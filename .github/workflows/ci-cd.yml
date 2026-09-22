@@ -27,6 +27,14 @@ jobs:
       - name: Démarrer les conteneurs
         run: docker compose up -d
 
+      - name: Vérifier les conteneurs
+        if: always()
+        run: docker compose ps
+
+      - name: Afficher les logs du backend
+        if: always()
+        run: docker compose logs --tail=200 backend
+
       - name: Attendre que le backend soit prêt
         run: |
           echo "Attente du backend..."
