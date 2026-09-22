@@ -12,7 +12,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 DB_PATH = BASE_DIR / "data" / "logistique.db"
 
 # ── Modèle ML ─────────────────────────────────────────────────────────────────
-MODEL_PATH = BASE_DIR / "models" / "random_forest.pkl"
+MODEL_PATH = BASE_DIR / "models" / "regression_logistique.joblib"
 
 # ── Sécurité JWT ──────────────────────────────────────────────────────────────
 SECRET_KEY = os.getenv("SECRET_KEY", "changeme")
