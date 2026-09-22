@@ -73,22 +73,6 @@ jobs:
           docker compose down
           docker compose up -d --build
 
-      - name: Attendre que le backend soit prêt
-        shell: powershell
-        run: |
-          Write-Host "Attente du backend..."
-          for ($i = 1; $i -le 30; $i++) {
-            try {
-              $response = Invoke-WebRequest -Uri "http://localhost:8000/" -UseBasicParsing -TimeoutSec 5
-              if ($response.StatusCode -eq 200) {
-                Write-Host "✅ Backend prêt !"
-                break
-              }
-            } catch {
-              Write-Host "Tentative $i/30 — attente 5s..."
-              Start-Sleep -Seconds 5
-            }
-          }
 
       - name: Initialiser la base de données
         shell: powershell
