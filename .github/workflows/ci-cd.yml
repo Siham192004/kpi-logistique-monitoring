@@ -24,12 +24,26 @@ jobs:
       - name: Builder les images Docker
         run: docker compose build
 
-      - name: Tester le backend
+      - name: Démarrer les conteneurs
+        run: docker compose up -d
+
+      - name: Attendre que le backend soit prêt
         run: |
-          docker compose up -d
-          sleep 10
-          curl -f http://localhost:8000/ || exit 1
-          docker compose down
+          echo "Attente du backend..."
+          for i in {1..30}; do
+            if curl -sf http://localhost:8000/; then
+              echo "✅ Backend prêt !"
+              break
+            fi
+            echo "Tentative $i/30 — attente 5s..."
+            sleep 5
+          done
+
+      - name: Tester le backend
+        run: curl -f http://localhost:8000/
+
+      - name: Arrêter les conteneurs
+        run: docker compose down
 
   deploy:
     runs-on: self-hosted
@@ -52,16 +66,31 @@ jobs:
           if (-not (Test-Path $dest)) { New-Item -ItemType Directory -Path $dest }
           Copy-Item "$source\*" "$dest\" -Force -Recurse
 
-
-      - name: Redémarrer Docker automatiquement
+      - name: Redémarrer Docker
         shell: powershell
         run: |
           docker ps -q | ForEach-Object { docker stop $_ }
           docker compose down
           docker compose up -d --build
-      
+
+      - name: Attendre que le backend soit prêt
+        shell: powershell
+        run: |
+          Write-Host "Attente du backend..."
+          for ($i = 1; $i -le 30; $i++) {
+            try {
+              $response = Invoke-WebRequest -Uri "http://localhost:8000/" -UseBasicParsing -TimeoutSec 5
+              if ($response.StatusCode -eq 200) {
+                Write-Host "✅ Backend prêt !"
+                break
+              }
+            } catch {
+              Write-Host "Tentative $i/30 — attente 5s..."
+              Start-Sleep -Seconds 5
+            }
+          }
+
       - name: Initialiser la base de données
         shell: powershell
         run: |
-          Start-Sleep -Seconds 15
           docker exec kpi-logistique-monitoring-backend-1 python database/db.py
