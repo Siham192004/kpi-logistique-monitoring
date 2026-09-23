@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useSearchParams, useLocation } from 'react-router-dom'
 import { AppLayout } from '../components/layout/AppLayout'
 import { Header } from '../components/layout/Header'
 import { Badge, niveauToBadge, niveauLabel } from '../components/ui/Badge'
@@ -14,6 +14,7 @@ import styles from './KPIDetailPage.module.css'
 import { useRef } from 'react'
 import html2canvas from 'html2canvas'
 import { Download } from 'lucide-react'
+
 
 
 const TABS = ['KPI1', 'KPI2', 'KPI3', 'KPI4', 'KPI5']
@@ -85,6 +86,7 @@ export const KPIDetailPage = () => {
   const [loading,      setLoading]      = useState(true)
   const [selectedCategorie,  setSelectedCategorie]  = useState(null)
   const chartRef = useRef(null)
+  const location = useLocation() 
 
 const handleExportPNG = () => {
   html2canvas(chartRef.current).then(canvas => {
@@ -103,7 +105,6 @@ const handleExportPNG = () => {
     setDetailData(null)
     setSelectedCategorie(null)
 
-    // ✅ N'envoyer l'année que si elle est sélectionnée
     const y   = selectedYear ? `annee=${selectedYear}` : ''
     const sep = y ? '?' : ''
 
@@ -111,21 +112,23 @@ const handleExportPNG = () => {
 
     if (['KPI1', 'KPI2', 'KPI4', 'KPI5'].includes(activeTab)) {
       const groupUrl = `/kpis/${activeTab}/groupe/${groupBy}${sep}${y}`
-      fetches.push(apiFetch(groupUrl).then(d => setChartData(d)))
+      fetches.push(apiFetch(groupUrl).then(d => { if (!cancelled) setChartData(d) }))
     }
 
     if (activeTab === 'KPI3') {
-      fetches.push(apiFetch(`/kpis/kpi3/detail${sep}${y}`).then(d => setDetailData(d)))
+      fetches.push(apiFetch(`/kpis/kpi3/detail${sep}${y}`).then(d => { if (!cancelled) setDetailData(d) }))
     }
     if (activeTab === 'KPI4') {
-      fetches.push(apiFetch(`/kpis/kpi4/detail${sep}${y}`).then(d => setDetailData(d)))
+      fetches.push(apiFetch(`/kpis/kpi4/detail${sep}${y}`).then(d => { if (!cancelled) setDetailData(d) }))
     }
     if (activeTab === 'KPI5') {
-      fetches.push(apiFetch(`/kpis/kpi5/detail${sep}${y}`).then(d => setDetailData(d)))
+      fetches.push(apiFetch(`/kpis/kpi5/detail${sep}${y}`).then(d => { if (!cancelled) setDetailData(d) }))
     }
 
-    Promise.all(fetches).finally(() => setLoading(false))
-  }, [activeTab, groupBy, selectedYear])
+    Promise.all(fetches).finally(() => { if (!cancelled) setLoading(false) })
+
+    return () => { cancelled = true }                                    // ✅ dans le useEffect
+  }, [activeTab, groupBy, selectedYear, location.key])                   // ✅ dépendances ici
 
   const processedItems = (() => {
     const raw = chartData?.items || []
