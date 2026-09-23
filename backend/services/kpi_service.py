@@ -283,8 +283,10 @@ def get_kpi4_detail(db: Session, filtres: FiltresDashboardSchema) -> Kpi4DetailS
     pct_modifies = round(nb_modifies / total * 100, 1) if total > 0 else 0
     pct_normaux  = round(nb_normaux  / total * 100, 1) if total > 0 else 0
 
-    MONTH_ORDER = ['January','February','March','April','May','June',
-                   'July','August','September','October','November','December']
+    MONTH_ORDER = [
+    'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
+    'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'
+]
 
     par_mois = []
     try:
@@ -461,6 +463,10 @@ def get_rapport_carriers_mensuel(db: Session, annee: str | None = None, carrier:
         v2 = kpi2(grp)
         v4 = kpi4(grp)
         v5 = kpi5(grp)
+
+        # ✅ Ignorer les mois sans données suffisantes
+        if any(v is None for v in [v1, v2, v4, v5]):
+            continue
 
         score = round((v1 * 0.30) + (v2 * 0.15) + ((100 - v4) * 0.20) + ((100 - v5) * 0.35), 1)
 
