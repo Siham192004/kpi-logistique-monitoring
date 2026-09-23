@@ -40,13 +40,13 @@ jobs:
       - name: Build & Push image frontend
         uses: docker/build-push-action@v5
         with:
-          context: .
-          file: ./Dockerfile.frontend
-          push: true
-          tags: harrouchasiham/kpi-frontend:latest
-          build-args: |
-            VITE_WS_URL=wss://kpi-backend-latest.onrender.com
-            VITE_API_URL=https://kpi-backend-latest.onrender.com
+           context: .
+           file: ./Dockerfile.frontend
+           push: true
+           tags: harrouchasiham/kpi-frontend:latest
+           build-args: |
+              VITE_WS_URL=wss://kpi-backend-latest.onrender.com
+              VITE_API_URL=https://kpi-backend-latest.onrender.com
 
       # ── TRIGGER RENDER ─────────────────────────────────────
       - name: Trigger Render Deploy Backend

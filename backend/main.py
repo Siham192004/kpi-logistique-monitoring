@@ -23,7 +23,7 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:5173",  # Vite dev
         "http://localhost:3000",  # Docker
-        "https://kpi-frontend-latest.onrender.com"
+        "https://kpi-logistique.onrender.com"
     ],
     allow_credentials=True,
     allow_methods=["*"],
