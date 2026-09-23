@@ -174,7 +174,10 @@ export const KPIDetailPage = () => {
     })
     return Object.values(byMonth)
   }
-  
+  // DEBUG — à supprimer après
+console.log('par_mois:', detailData?.par_mois?.slice(0, 3))
+console.log('localCarrier:', localCarrier)
+console.log('parMoisFiltered:', parMoisFiltered)
   // Filtrer par carrier sélectionné
   return all.filter(row => row.carrier === localCarrier)
 })()
