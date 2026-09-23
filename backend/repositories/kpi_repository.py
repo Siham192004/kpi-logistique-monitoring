@@ -75,7 +75,7 @@ def get_mois_disponibles(db: Session) -> list:
         db.query(Shipment.month)
         .filter(Shipment.month.isnot(None))
         .distinct()
-        .order_by(Shipment.etd.asc())
+        .order_by(Shipment.month.asc())
         .all()
     )
     return [r[0] for r in rows]

@@ -5,7 +5,7 @@ on:
     branches: [ main ]
 
 jobs:
-  build-and-test:
+  build-and-deploy:
     runs-on: ubuntu-latest
     steps:
       - name: Récupérer le code
@@ -21,60 +21,21 @@ jobs:
           ACCESS_TOKEN_EXPIRE_MINUTES=${{ secrets.ACCESS_TOKEN_EXPIRE_MINUTES }}
           EOF
 
-      - name: Builder les images Docker
-        run: docker compose build
+      - name: Login Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Démarrer les conteneurs
-        run: docker compose up -d
+      - name: Build & Push image backend
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile.backend      # ← vérifie le nom exact de ton Dockerfile
+          push: true
+          tags: harrouchasiham/kpi-backend:latest
 
-      - name: Attendre que le backend soit prêt
+      - name: Trigger Render Deploy
         run: |
-          echo "Attente du backend..."
-          for i in {1..30}; do
-            if curl -sf "https://kpi-backend-latest.onrender.com"; then
-              echo "✅ Backend prêt !"
-              break
-            fi
-            echo "Tentative $i/30 — attente 5s..."
-            sleep 5
-          done
-
-      - name: Tester le backend
-        run: curl -f "https://kpi-backend-latest.onrender.com"
-
-      - name: Arrêter les conteneurs
-        run: docker compose down
-
-  deploy:
-    runs-on: self-hosted
-    needs: build-and-test
-    steps:
-      - name: Récupérer le code
-        uses: actions/checkout@v4
-
-      - name: Créer le fichier .env
-        shell: powershell
-        run: |
-          $content = "ADMIN_PASSWORD=${{ secrets.ADMIN_PASSWORD }}`nOPERATEUR_DEFAULT_PASSWORD=${{ secrets.OPERATEUR_DEFAULT_PASSWORD }}`nSECRET_KEY=${{ secrets.SECRET_KEY }}`nALGORITHM=${{ secrets.ALGORITHM }}`nACCESS_TOKEN_EXPIRE_MINUTES=${{ secrets.ACCESS_TOKEN_EXPIRE_MINUTES }}"
-          [System.IO.File]::WriteAllText(".env", $content, [System.Text.Encoding]::UTF8)
-
-      - name: Copier les données vers le dossier runner
-        shell: powershell
-        run: |
-          $source = Join-Path $env:USERPROFILE "Desktop\Stage_PFA_2026\kpi-monitoring-platform\data"
-          $dest = Join-Path $pwd "data"
-          if (-not (Test-Path $dest)) { New-Item -ItemType Directory -Path $dest }
-          Copy-Item "$source\*" "$dest\" -Force -Recurse
-
-      - name: Redémarrer Docker
-        shell: powershell
-        run: |
-          docker ps -q | ForEach-Object { docker stop $_ }
-          docker compose down
-          docker compose up -d --build
-
-
-      - name: Initialiser la base de données
-        shell: powershell
-        run: |
-          docker exec kpi-logistique-monitoring-backend-1 python database/db.py
+          curl -X POST "${{ secrets.RENDER_DEPLOY_HOOK }}"
+          echo "✅ Deploy Render déclenché !"
