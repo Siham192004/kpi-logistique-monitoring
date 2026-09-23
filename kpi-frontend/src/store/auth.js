@@ -68,9 +68,15 @@ export const apiFetch = async (path, options = {}) => {
     throw new Error('Session expirée')
   }
   if (!res.ok) {
-    const err = await res.json().catch(() => ({}))
-    throw new Error(err.detail || `Erreur ${res.status}`)
+  const err = await res.json().catch(() => ({}))
+
+  // ✅ Erreur Pydantic → detail est un tableau d'objets
+  if (Array.isArray(err.detail)) {
+    const messages = err.detail.map(e => e.msg).join('\n')
+    throw new Error(messages)
   }
-  const text = await res.text()
-  return text ? JSON.parse(text) : {}
+
+  // ✅ Erreur simple string (HTTPException FastAPI)
+  throw new Error(err.detail || `Erreur ${res.status}`)
+}
 }

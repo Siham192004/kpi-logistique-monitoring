@@ -133,7 +133,7 @@ export const ShipmentsPage = () => {
   function emptyForm() {
     return {
       carrier: '', vessel_nom: '', port_chargement: '', port_dechargement: '',
-      pays_destination: '', shipment_status: 'Normal', type_annulation: 'Non annulé',
+      pays_destination: '', shipment_status: 'Normal',
       etd: '', eta: '', atd: '', ata: '',
       incoterm: '', volume_booked: '', confirmed_volume: '', charged_volume: '',
       transit_time: '', frequency: '',
@@ -301,7 +301,6 @@ const handleExportExcel = async () => {
       port_chargement: s.port_chargement || '', port_dechargement: s.port_dechargement || '',
       pays_destination: s.pays_destination || '',
       shipment_status: s.shipment_status || 'Normal',
-      type_annulation: s.type_annulation || 'Non annulé',
       etd: s.etd || '', eta: s.eta || '', atd: s.atd || '', ata: s.ata || '',
       incoterm: s.incoterm || '', volume_booked: s.volume_booked || '',
       confirmed_volume: s.confirmed_volume || '', charged_volume: s.charged_volume || '',

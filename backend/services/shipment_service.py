@@ -209,6 +209,10 @@ def _colonnes_derivees_vides() -> dict:
         "niveau_retard":                 None,
     }
 
+def _calculer_type_annulation(data: dict) -> str:
+    """ATD renseigné → Après départ, sinon → Avant départ."""
+    return "Après départ" if data.get("atd") else "Avant départ"
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # CONSULTATION
@@ -279,16 +283,18 @@ def creer_shipment(db: Session, data: ShipmentCreateSchema, createur_id: int) ->
     data_dict.pop("carrier", None)     # porté par vessel, pas par shipment
 
     # Convertir enums en valeur string
-    data_dict["shipment_status"] = data.shipment_status.value
-    data_dict["type_annulation"] = data.type_annulation.value
+    # ✅ Après
     if data.incoterm:
-        data_dict["incoterm"] = data.incoterm.value
+       data_dict["incoterm"] = data.incoterm.value
+# type_annulation n'est plus dans le schema, on le calcule directement
 
-    # 3. Colonnes dérivées
+# 3. Colonnes dérivées
     if data.shipment_status.value == "Normal":
-        data_dict.update(_calculer_colonnes_derivees(data_dict))
+       data_dict.update(_calculer_colonnes_derivees(data_dict))
+       data_dict["type_annulation"] = "Non annulé"                          # ✅
     else:
-        data_dict.update(_colonnes_derivees_vides())
+       data_dict.update(_colonnes_derivees_vides())
+       data_dict["type_annulation"] = _calculer_type_annulation(data_dict)  # ✅
 
     # 4. ✅ Filtrer : ne garder que les colonnes de la table shipment
     shipment_id = insert_shipment(db, _filtrer_colonnes_shipment(data_dict))
@@ -348,9 +354,11 @@ def modifier_shipment(db: Session, shipment_id: int, data: ShipmentUpdateSchema,
     # 5. Recalculer colonnes dérivées
     statut = donnees_finales.get("shipment_status", "Normal")
     if statut == "Normal":
-        donnees_finales.update(_calculer_colonnes_derivees(donnees_finales))
+       donnees_finales.update(_calculer_colonnes_derivees(donnees_finales))
+       donnees_finales["type_annulation"] = "Non annulé"                             # ✅ reset si repassé Normal
     else:
-        donnees_finales.update(_colonnes_derivees_vides())
+       donnees_finales.update(_colonnes_derivees_vides())
+       donnees_finales["type_annulation"] = _calculer_type_annulation(donnees_finales)  # ✅ auto
 
     # 6. ✅ Filtrer : éliminer vessel_nom, carrier, id et tout champ inconnu
     #    avant d'appeler SQLAlchemy .update() — c'était la cause de l'erreur 500

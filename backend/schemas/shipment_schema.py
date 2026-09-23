@@ -37,7 +37,6 @@ class ShipmentCreateSchema(BaseModel):
     port_dechargement: str
     pays_destination:  str
     shipment_status: ShipmentStatusEnum = ShipmentStatusEnum.normal
-    type_annulation: TypeAnnulationEnum = TypeAnnulationEnum.non_annule
     etd: Optional[date] = None
     eta: Optional[date] = None
     atd: Optional[date] = None
@@ -103,10 +102,6 @@ class ShipmentCreateSchema(BaseModel):
             if self.type_annulation != TypeAnnulationEnum.non_annule:
                 raise ValueError("Type annulation doit être 'Non annulé' pour un shipment Normal.")
 
-        if self.shipment_status == ShipmentStatusEnum.cancelled:
-            if self.type_annulation == TypeAnnulationEnum.non_annule:
-                raise ValueError("Veuillez préciser le type d'annulation : 'Avant départ' ou 'Après départ'.")
-
         if (self.port_chargement and self.port_dechargement and
                 self.port_chargement.strip().lower() == self.port_dechargement.strip().lower()):
             raise ValueError("Le port de chargement et le port de déchargement ne peuvent pas être identiques.")
@@ -135,8 +130,7 @@ class ShipmentUpdateSchema(BaseModel):
     transit_time:      Optional[int]                = None
     frequency:         Optional[str]                = None
     shipment_status:   Optional[ShipmentStatusEnum] = None
-    type_annulation:   Optional[TypeAnnulationEnum] = None
-
+    
     @field_validator("carrier", mode="before")
     @classmethod
     def normaliser_carrier(cls, v):
