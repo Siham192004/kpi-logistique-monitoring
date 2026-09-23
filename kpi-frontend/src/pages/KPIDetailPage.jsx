@@ -220,32 +220,6 @@ export const KPIDetailPage = () => {
 
         <div className={styles.tabHead}>
           <h2 className={styles.tabTitle}>{KPI_LABELS[activeTab]}</h2>
-
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            {/* Filtre Année */}
-            <select
-              style={selectStyle}
-              value={selectedYear}
-              onChange={e => setSelectedYear(e.target.value)}
-            >
-              <option value="">Toutes les années</option>
-              {YEARS.map(year => (
-                <option key={year} value={year}>{year}</option>
-              ))}
-            </select>
-
-            {/* Filtre Carrier */}
-            <select
-              style={selectStyle}
-              value={selectedCarrier}
-              onChange={e => setSelectedCarrier(e.target.value)}
-            >
-              <option value="">Tous les carriers</option>
-              {carriers.map(c => (
-                <option key={c} value={c}>{c}</option>
-              ))}
-            </select>
-          </div>
         </div>
 
         {/* Charts KPI1/2/4/5 */}
