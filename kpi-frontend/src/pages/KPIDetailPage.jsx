@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { useSearchParams, useLocation } from 'react-router-dom'
 import { AppLayout } from '../components/layout/AppLayout'
 import { Header } from '../components/layout/Header'
@@ -11,7 +11,6 @@ import {
   Tooltip, ResponsiveContainer, Legend, LineChart, Line
 } from 'recharts'
 import styles from './KPIDetailPage.module.css'
-import { useRef } from 'react'
 import html2canvas from 'html2canvas'
 import { Download } from 'lucide-react'
 
@@ -24,6 +23,7 @@ const KPI_LABELS = {
   KPI5: 'Déviation ETA vs ATA',
 }
 const STATUS_COLORS = { 'On target': '#10b981', 'To monitor': '#f59e0b', 'Critical': '#ef4444' }
+const NIVEAU_COLORS = { 'On target': '#10b981', 'To monitor': '#f59e0b', 'Critical': '#ef4444' }
 
 const YEARS = Array.from({ length: 2050 - 2022 + 1 }, (_, i) => String(2022 + i))
 
@@ -83,6 +83,8 @@ export const KPIDetailPage = () => {
   const [localCarrier,      setLocalCarrier]      = useState('')
   const [chartData,         setChartData]         = useState(null)
   const [detailData,        setDetailData]        = useState(null)
+  const [parMoisData,       setParMoisData]       = useState([])   // ← état séparé
+  const [parMoisLoading,    setParMoisLoading]    = useState(false)
   const [loading,           setLoading]           = useState(true)
   const [selectedCategorie, setSelectedCategorie] = useState(null)
   const chartRef = useRef(null)
@@ -104,6 +106,7 @@ export const KPIDetailPage = () => {
       .catch(() => {})
   }, [])
 
+  // Fetch principal — NE dépend PAS de localCarrier
   useEffect(() => {
     let cancelled = false
 
@@ -141,6 +144,31 @@ export const KPIDetailPage = () => {
     return () => { cancelled = true }
   }, [activeTab, groupBy, selectedYear, location.key])
 
+  // Fetch dédié au graphe mensuel KPI4 — dépend de localCarrier
+  useEffect(() => {
+    if (activeTab !== 'KPI4') return
+
+    let cancelled = false
+    setParMoisLoading(true)
+
+    const queryParts = []
+    if (selectedYear)  queryParts.push(`annee=${selectedYear}`)
+    if (localCarrier)  queryParts.push(`carrier=${encodeURIComponent(localCarrier)}`)
+    const query = queryParts.length ? `?${queryParts.join('&')}` : ''
+
+    apiFetch(`/kpis/kpi4/par_mois${query}`)
+      .then(d => { if (!cancelled) setParMoisData(d.par_mois || []) })
+      .catch(() => { if (!cancelled) setParMoisData([]) })
+      .finally(() => { if (!cancelled) setParMoisLoading(false) })
+
+    return () => { cancelled = true }
+  }, [activeTab, selectedYear, localCarrier])
+
+  // Reset localCarrier quand on change d'onglet
+  useEffect(() => {
+    setLocalCarrier('')
+  }, [activeTab])
+
   const processedItems = (() => {
     const raw = chartData?.items || []
     if (groupBy === 'month') return sortAndLabelMonths(raw)
@@ -157,32 +185,6 @@ export const KPIDetailPage = () => {
     { name: "À l'heure", value: detailData.nb_a_lheure,  color: '#10b981' },
     { name: 'En retard',  value: detailData.nb_en_retard, color: '#ef4444' },
   ] : []
-
-  const parMoisFiltered = (() => {
-  const all = Array.isArray(detailData?.par_mois) ? detailData.par_mois : []
-  
-  if (!localCarrier) {
-    // Agréger toutes les lignes par mois
-    const byMonth = {}
-    all.forEach(row => {
-      if (!byMonth[row.month]) {
-        byMonth[row.month] = { month: row.month, normal: 0, modifie: 0, annule: 0 }
-      }
-      byMonth[row.month].normal  += row.normal
-      byMonth[row.month].modifie += row.modifie
-      byMonth[row.month].annule  += row.annule
-    })
-    return Object.values(byMonth)
-  }
-  // Filtrer par carrier sélectionné
-  return all.filter(row => row.carrier === localCarrier)
-})()
-
-  const NIVEAU_COLORS = {
-    'On target': '#10b981',
-    'To monitor': '#f59e0b',
-    'Critical': '#ef4444',
-  }
 
   const kpi3Columns = [
     { key: 'shipment_id', label: '#',
@@ -239,7 +241,6 @@ export const KPIDetailPage = () => {
 
         <div className={styles.tabHead}>
           <h2 className={styles.tabTitle}>{KPI_LABELS[activeTab]}</h2>
-
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <select
               style={selectStyle}
@@ -394,9 +395,12 @@ export const KPIDetailPage = () => {
                   ))}
                 </select>
               </div>
-              {Array.isArray(detailData.par_mois) && detailData.par_mois.length > 0 ? (
+
+              {parMoisLoading ? (
+                <SkeletonChart height={220} />
+              ) : parMoisData.length > 0 ? (
                 <ResponsiveContainer width="100%" height={220}>
-                  <LineChart data={parMoisFiltered} margin={{ top: 8, right: 16, left: -16, bottom: 8 }}>
+                  <LineChart data={parMoisData} margin={{ top: 8, right: 16, left: -16, bottom: 8 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" vertical={false} />
                     <XAxis dataKey="month" tick={{ fill: 'rgba(255,255,255,0.35)', fontSize: 11 }} tickLine={false} axisLine={false} />
                     <YAxis tick={{ fill: 'rgba(255,255,255,0.35)', fontSize: 11 }} tickLine={false} axisLine={false} allowDecimals={false} />

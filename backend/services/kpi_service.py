@@ -3,6 +3,7 @@ kpi_service.py — Logique métier : calcul et orchestration des KPIs
 """
 
 import pandas as pd
+from typing import Optional
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
@@ -19,7 +20,7 @@ from engine.kpi_engine import (
     kpi4, kpi4_effectif, kpi4_detail,
     kpi5, kpi5_effectif, kpi5_detail, kpi5_distribution,
     evaluer_kpi4, evaluer_kpi5,
-    KPI_LABELS, KPI_OBJECTIFS, kpi3_detail,   
+    KPI_LABELS, KPI_OBJECTIFS, kpi3_detail,
     CATEGORIES_KPI3,
 )
 from backend.schemas.kpi_schema import (
@@ -36,6 +37,11 @@ from backend.schemas.kpi_schema import (
     KpiDistributionSchema,
     CarrierRapportSchema,
 )
+
+MONTH_ORDER = [
+    'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
+    'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'
+]
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -75,6 +81,19 @@ def _series_to_groupe_items(
     return items
 
 
+def _build_statut_kpi4(df: pd.DataFrame) -> pd.DataFrame:
+    """Ajoute la colonne statut_kpi4 à un DataFrame — logique centralisée."""
+    df = df.copy()
+    df['est_annule']  = df['shipment_status'] == 'Cancelled'
+    df['est_modifie'] = (
+        (df['etd_deviation'].fillna(0) >= 4) & (~df['est_annule'])
+    )
+    df['statut_kpi4'] = 'Normal'
+    df.loc[df['est_modifie'], 'statut_kpi4'] = 'Modifié'
+    df.loc[df['est_annule'],  'statut_kpi4'] = 'Annulé'
+    return df
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # FILTRES DISPONIBLES
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -95,7 +114,7 @@ def get_dashboard(db: Session, filtres: FiltresDashboardSchema) -> DashboardSche
         db,
         mois=filtres.mois,
         carrier=filtres.carrier,
-        annee=filtres.annee,        # ✅
+        annee=filtres.annee,
     )
 
     v1 = kpi1(df)
@@ -182,7 +201,7 @@ def get_kpi_par_groupe(
         db,
         mois=filtres.mois,
         carrier=filtres.carrier,
-        annee=filtres.annee,        # ✅ AJOUT
+        annee=filtres.annee,
     )
 
     kpi_map = {
@@ -223,7 +242,6 @@ def get_kpi3_detail(db: Session, filtres: FiltresDashboardSchema) -> Kpi3DetailS
         annee=filtres.annee,
     )
 
-    # ── Répartition 7 catégories métier ──
     detail_dict = kpi3_detail(df)
     repartition = [
         Kpi3CategorieItemSchema(
@@ -234,20 +252,19 @@ def get_kpi3_detail(db: Session, filtres: FiltresDashboardSchema) -> Kpi3DetailS
         for cat in CATEGORIES_KPI3
     ]
 
-    # ── Tous les shipments KPI3 (Normal + critiques) ──
     critiques_df = kpi3_par_shipment(df)
     shipments_critiques = [
         Kpi3ShipmentCritiqueSchema(
-            shipment_id=      int(row['id']),
-            carrier=          row.get('carrier'),
-            vessel_nom=       row.get('vessel_nom'),
-            month=            row.get('month'),
-            port_chargement=  row.get('port_chargement'),
-            port_dechargement=row.get('port_dechargement'),
-            etd_deviation=    row.get('etd_deviation'),
-            eta_deviation=    row.get('eta_deviation'),
-            categorie_metier= row.get('categorie_metier'),
-            niveau_global=    row.get('niveau_global'),
+            shipment_id=         int(row['id']),
+            carrier=             row.get('carrier'),
+            vessel_nom=          row.get('vessel_nom'),
+            month=               row.get('month'),
+            port_chargement=     row.get('port_chargement'),
+            port_dechargement=   row.get('port_dechargement'),
+            etd_deviation=       row.get('etd_deviation'),
+            eta_deviation=       row.get('eta_deviation'),
+            categorie_metier=    row.get('categorie_metier'),
+            niveau_global=       row.get('niveau_global'),
             niveau_etd_deviation=row.get('niveau_etd_deviation'),
             niveau_delay_days=   row.get('niveau_delay_days'),
         )
@@ -274,50 +291,14 @@ def get_kpi4_detail(db: Session, filtres: FiltresDashboardSchema) -> Kpi4DetailS
     detail      = kpi4_detail(df)
     detail_dict = detail.to_dict() if not detail.empty else {}
 
-    total        = len(df)
-    nb_annules   = int(detail_dict.get("Annulé",  0))
-    nb_modifies  = int(detail_dict.get("Modifié", 0))
-    nb_normaux   = int(detail_dict.get("Normal",  0))
+    total       = len(df)
+    nb_annules  = int(detail_dict.get("Annulé",  0))
+    nb_modifies = int(detail_dict.get("Modifié", 0))
+    nb_normaux  = int(detail_dict.get("Normal",  0))
 
     pct_annules  = round(nb_annules  / total * 100, 1) if total > 0 else 0
     pct_modifies = round(nb_modifies / total * 100, 1) if total > 0 else 0
     pct_normaux  = round(nb_normaux  / total * 100, 1) if total > 0 else 0
-
-    MONTH_ORDER = [
-    'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
-    'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'
-]
-
-    par_mois = []
-    try:
-        df_copy = df.copy()
-        df_copy['est_annule']  = df_copy['shipment_status'] == 'Cancelled'
-        df_copy['est_modifie'] = (
-            (df_copy['etd_deviation'].fillna(0) >= 4) & (~df_copy['est_annule'])
-        )
-        df_copy['statut_kpi4'] = 'Normal'
-        df_copy.loc[df_copy['est_modifie'], 'statut_kpi4'] = 'Modifié'
-        df_copy.loc[df_copy['est_annule'],  'statut_kpi4'] = 'Annulé'
-
-# ✅ Groupby par carrier + month + statut
-        grouped = df_copy.groupby(['carrier', 'month', 'statut_kpi4'], dropna=True).size().reset_index()
-        grouped.columns = ['carrier', 'month', 'statut', 'count']
-
-        for carrier_name, grp_carrier in grouped.groupby('carrier'):
-           pivot = grp_carrier.pivot(index='month', columns='statut', values='count').fillna(0)
-           pivot = pivot.reindex([m for m in MONTH_ORDER if m in pivot.index])
-
-        for month, row in pivot.iterrows():
-          par_mois.append({
-            "carrier": carrier_name,
-            "month":   month[:3],
-            "normal":  int(row.get("Normal",  0)),
-            "modifie": int(row.get("Modifié", 0)),
-            "annule":  int(row.get("Annulé",  0)),
-        })
-    except Exception as e:
-        print(f"[KPI4] Erreur calcul par_mois: {e}")
-        par_mois = []
 
     return Kpi4DetailSchema(
         valeur=valeur,
@@ -329,8 +310,53 @@ def get_kpi4_detail(db: Session, filtres: FiltresDashboardSchema) -> Kpi4DetailS
         pct_annules=pct_annules,
         pct_modifies=pct_modifies,
         pct_normaux=pct_normaux,
-        par_mois=par_mois,
+        par_mois=[],  # ← plus utilisé, le frontend appelle /kpi4/par_mois séparément
     )
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# KPI4 — ÉVOLUTION MENSUELLE (endpoint dédié, filtre carrier indépendant)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def get_kpi4_par_mois(db: Session, annee: Optional[str], carrier: Optional[str]) -> dict:
+    """
+    Calcule l'évolution mensuelle Normal/Modifié/Annulé pour KPI4.
+    Utilise le même DataFrame pandas que le reste du service.
+    Filtre carrier indépendant → ne recharge pas les autres widgets.
+    """
+    df = get_data_kpis_filtres(db, mois=None, carrier=carrier, annee=annee)
+
+    if df.empty:
+        return {"par_mois": []}
+
+    df = _build_statut_kpi4(df)
+
+    grouped = (
+        df.groupby(['month', 'statut_kpi4'], dropna=True)
+        .size()
+        .reset_index(name='count')
+    )
+
+    if grouped.empty:
+        return {"par_mois": []}
+
+    pivot = grouped.pivot(index='month', columns='statut_kpi4', values='count').fillna(0)
+
+    # Trier les mois dans l'ordre calendaire
+    pivot = pivot.reindex([m for m in MONTH_ORDER if m in pivot.index])
+
+    par_mois = []
+    for month, row in pivot.iterrows():
+        par_mois.append({
+            "month":   month[:3],
+            "normal":  int(row.get("Normal",  0)),
+            "modifie": int(row.get("Modifié", 0)),
+            "annule":  int(row.get("Annulé",  0)),
+        })
+
+    return {"par_mois": par_mois}
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # DÉTAIL KPI5
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -377,7 +403,7 @@ def get_distribution(
         db,
         mois=filtres.mois,
         carrier=filtres.carrier,
-        annee=filtres.annee,        # ✅ AJOUT
+        annee=filtres.annee,
     )
 
     dist_map = {
@@ -444,7 +470,12 @@ def get_rapport_carriers(db: Session) -> list[CarrierRapportSchema]:
 
     return rapport
 
-def get_rapport_carriers_mensuel(db: Session, annee: str | None = None, carrier: str | None = None) -> list:
+
+def get_rapport_carriers_mensuel(
+    db: Session,
+    annee: Optional[str] = None,
+    carrier: Optional[str] = None,
+) -> list:
     from backend.repositories.kpi_repository import get_all_shipments_avec_annules
     df = get_all_shipments_avec_annules(db)
     if df.empty:
@@ -467,7 +498,6 @@ def get_rapport_carriers_mensuel(db: Session, annee: str | None = None, carrier:
         v4 = kpi4(grp)
         v5 = kpi5(grp)
 
-        # ✅ Ignorer les mois sans données suffisantes
         if any(v is None for v in [v1, v2, v4, v5]):
             continue
 
