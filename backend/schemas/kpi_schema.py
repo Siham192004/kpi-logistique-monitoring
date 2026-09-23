@@ -131,26 +131,23 @@ class Kpi3DetailSchema(BaseModel):
 # DETAIL KPI4 — Taux de modifications et annulations
 # ════════════════════════════════════════════════════════════════════════════════
 
+class Kpi4ParMoisItem(BaseModel):
+    month:   str
+    normal:  int
+    modifie: int
+    annule:  int
+
 class Kpi4DetailSchema(BaseModel):
-    """
-    Détail complet de KPI4.
-    - repartition_statut   : Normal / Modifié / Annulé
-    - repartition_annulation : Avant départ / Après départ
-    Correspond à kpi4_detail() + kpi4_type_annulation() dans kpi_engine.py.
-    """
-    valeur:                  Optional[float] = None
-    niveau:                  Optional[str]   = None
-    effectif:                int
-    nb_annules:              int
-    nb_modifies:             int
-    nb_normaux:              int
-    nb_avant_depart:         int
-    nb_apres_depart:         int
-    pct_annules:      float = 0.0
-    pct_modifies:     float = 0.0
-    pct_normaux:      float = 0.0
-    pct_avant_depart: float = 0.0
-    pct_apres_depart: float = 0.0
+    valeur:          Optional[float]
+    niveau:          Optional[str]
+    effectif:        int
+    nb_annules:      int
+    nb_modifies:     int
+    nb_normaux:      int
+    pct_annules:     float
+    pct_modifies:    float
+    pct_normaux:     float
+    par_mois:        list[Kpi4ParMoisItem] = []   # ✅ nouveau
 
 
 # ════════════════════════════════════════════════════════════════════════════════

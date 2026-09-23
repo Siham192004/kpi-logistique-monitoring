@@ -8,7 +8,7 @@ import { SkeletonChart, SkeletonTable } from '../components/ui/Skeleton'
 import { apiFetch } from '../store/auth'
 import {
   BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, Legend
+  Tooltip, ResponsiveContainer, Legend, LineChart, Line
 } from 'recharts'
 import styles from './KPIDetailPage.module.css'
 import { useRef } from 'react'
@@ -259,72 +259,64 @@ const kpi3Columns = [
           </div>
         )}
 
-        {/* KPI3 */}
+       {/* KPI3 */}
         {activeTab === 'KPI3' && (
-  <div>
-    {/* Répartition 7 catégories */}
-    {loading && <SkeletonTable rows={3} cols={4} />}
-    {!loading && Array.isArray(detailData?.repartition) && (
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '20px' }}>
-        {detailData.repartition.map((item, i) => (
-  <div key={i}
-    onClick={() => setSelectedCategorie(
-      selectedCategorie === item.categorie ? null : item.categorie
-    )}
-    style={{
-      background: 'var(--color-surface)',
-      border: `2px solid ${
-        selectedCategorie === item.categorie
-          ? NIVEAU_COLORS[item.niveau]
-          : item.nombre > 0 ? NIVEAU_COLORS[item.niveau] + '40' : 'var(--color-border)'
-      }`,
-      borderRadius: 'var(--radius-md)',
-      padding: '10px 14px',
-      minWidth: '160px',
-      flex: '1',
-      cursor: item.nombre > 0 ? 'pointer' : 'default',
-      opacity: selectedCategorie && selectedCategorie !== item.categorie ? 0.45 : 1,
-      transition: 'all 0.15s ease',
-    }}>
-            <div style={{
-              fontSize: '22px',
-              fontWeight: 700,
-              color: item.nombre > 0 ? NIVEAU_COLORS[item.niveau] : 'var(--color-text-tertiary)',
-            }}>
-              {item.nombre}
-            </div>
-            <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginTop: '4px' }}>
-              {item.categorie}
-            </div>
-            <Badge
-              variant={niveauToBadge(item.niveau)}
-              size="sm"
-              style={{ marginTop: '6px' }}
-            >
-              {niveauLabel(item.niveau)}
-            </Badge>
+          <div>
+            {loading && <SkeletonTable rows={3} cols={4} />}
+            {!loading && Array.isArray(detailData?.repartition) && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '20px' }}>
+                {detailData.repartition.map((item, i) => (
+                  <div key={i}
+                    onClick={() => setSelectedCategorie(
+                      selectedCategorie === item.categorie ? null : item.categorie
+                    )}
+                    style={{
+                      background: 'var(--color-surface)',
+                      border: `2px solid ${
+                        selectedCategorie === item.categorie
+                          ? NIVEAU_COLORS[item.niveau]
+                          : item.nombre > 0 ? NIVEAU_COLORS[item.niveau] + '40' : 'var(--color-border)'
+                      }`,
+                      borderRadius: 'var(--radius-md)',
+                      padding: '10px 14px',
+                      minWidth: '160px',
+                      flex: '1',
+                      cursor: item.nombre > 0 ? 'pointer' : 'default',
+                      opacity: selectedCategorie && selectedCategorie !== item.categorie ? 0.45 : 1,
+                      transition: 'all 0.15s ease',
+                    }}>
+                    <div style={{
+                      fontSize: '22px', fontWeight: 700,
+                      color: item.nombre > 0 ? NIVEAU_COLORS[item.niveau] : 'var(--color-text-tertiary)',
+                    }}>
+                      {item.nombre}
+                    </div>
+                    <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginTop: '4px' }}>
+                      {item.categorie}
+                    </div>
+                    <Badge variant={niveauToBadge(item.niveau)} size="sm" style={{ marginTop: '6px' }}>
+                      {niveauLabel(item.niveau)}
+                    </Badge>
+                  </div>
+                ))}
+              </div>
+            )}
+            {!loading && (
+              <DataTable
+                columns={kpi3Columns}
+                data={(() => {
+                  const all = Array.isArray(detailData?.shipments_critiques) ? detailData.shipments_critiques : []
+                  if (!selectedCategorie) return all
+                  return all.filter(s => s.categorie_metier === selectedCategorie)
+                })()}
+                rowKey="shipment_id"
+                emptyMessage="Aucun shipment pour cette catégorie"
+              />
+            )}
           </div>
-        ))}
-      </div>
-    )}
+        )}
 
-    {/* Tableau shipments critiques */}
-    {!loading && (
-      <DataTable
-  columns={kpi3Columns}
-  data={(() => {
-    const all = Array.isArray(detailData?.shipments_critiques) ? detailData.shipments_critiques : []
-    if (!selectedCategorie) return all
-    return all.filter(s => s.categorie_metier === selectedCategorie)
-  })()}
-  rowKey="shipment_id"
-  emptyMessage="Aucun shipment pour cette catégorie"
-/>
-    )}
-  </div>
-)}
-
-        {/* KPI4 */}
+        {/* ✅ KPI4 — Pie chart + LineChart évolution mensuelle */}
         {activeTab === 'KPI4' && detailData && (
           <div className={styles.row}>
             <div className={styles.chartCard}>
@@ -347,19 +339,57 @@ const kpi3Columns = [
                 </PieChart>
               </ResponsiveContainer>
             </div>
+
+            {/* ✅ LineChart évolution mensuelle — remplace Avant/après départ */}
             <div className={styles.chartCard}>
-              <h3 className={styles.chartTitle}>Avant / après départ</h3>
-              <div className={styles.kpi4Stats}>
-                <div className={styles.bigStat}>
-                  <span className={styles.bigStatVal}>{detailData.nb_avant_depart}</span>
-                  <span className={styles.bigStatLabel}>Avant départ</span>
+              <h3 className={styles.chartTitle}>Évolution mensuelle des statuts</h3>
+              {Array.isArray(detailData.par_mois) && detailData.par_mois.length > 0 ? (
+                <ResponsiveContainer width="100%" height={240}>
+                  <LineChart
+                    data={detailData.par_mois}
+                    margin={{ top: 8, right: 16, left: -16, bottom: 8 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" vertical={false} />
+                    <XAxis
+                      dataKey="month"
+                      tick={{ fill: 'rgba(255,255,255,0.35)', fontSize: 11 }}
+                      tickLine={false} axisLine={false}
+                    />
+                    <YAxis
+                      tick={{ fill: 'rgba(255,255,255,0.35)', fontSize: 11 }}
+                      tickLine={false} axisLine={false}
+                      allowDecimals={false}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        background: 'var(--color-surface)',
+                        border: '1px solid var(--color-border)',
+                        borderRadius: 8, fontSize: 12,
+                      }}
+                    />
+                    <Legend wrapperStyle={{ fontSize: '12px' }} />
+                    <Line type="monotone" dataKey="normal"  name="Normal"
+                      stroke="#10b981" strokeWidth={2}
+                      dot={{ r: 3, fill: '#10b981' }} activeDot={{ r: 5 }}
+                    />
+                    <Line type="monotone" dataKey="modifie" name="Modifié"
+                      stroke="#f59e0b" strokeWidth={2}
+                      dot={{ r: 3, fill: '#f59e0b' }} activeDot={{ r: 5 }}
+                    />
+                    <Line type="monotone" dataKey="annule"  name="Annulé"
+                      stroke="#ef4444" strokeWidth={2}
+                      dot={{ r: 3, fill: '#ef4444' }} activeDot={{ r: 5 }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              ) : (
+                <div style={{ 
+                  height: 240, display: 'flex', alignItems: 'center', 
+                  justifyContent: 'center', color: 'var(--color-text-tertiary)', fontSize: 13 
+                }}>
+                  Aucune donnée mensuelle disponible
                 </div>
-                <div className={styles.divider} />
-                <div className={styles.bigStat}>
-                  <span className={styles.bigStatVal} style={{ color: 'var(--color-danger)' }}>{detailData.nb_apres_depart}</span>
-                  <span className={styles.bigStatLabel}>Après départ</span>
-                </div>
-              </div>
+              )}
             </div>
           </div>
         )}

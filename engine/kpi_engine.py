@@ -321,14 +321,6 @@ def kpi4_detail(df, groupby=None, seuil_modification=SEUIL_MODIFICATION_KPI4):
     return df['statut_kpi4'].value_counts()
 
 
-def kpi4_type_annulation(df, groupby=None):
-    annules = df[df['shipment_status'] == 'Cancelled']
-    if annules.empty:
-        return pd.Series(dtype=int)
-    if groupby:
-        return annules.groupby(groupby, dropna=True)['type_annulation'].value_counts()
-    return annules['type_annulation'].value_counts()
-
 
 def kpi4_effectif(df, groupby=None):
     if groupby:
@@ -470,17 +462,6 @@ if __name__ == "__main__":
             print(f"\nShipments critiques sur delay days : {len(critique_arrivee)}")
             print(critique_arrivee[['carrier', 'month', 'eta_deviation', 'niveau_delay_days']].head(10))
 
-        if nom_kpi == 'KPI4':
-            valeur_globale = fonction(df)
-            print(f"Niveau global : {evaluer_kpi4(valeur_globale)}")
-            par_carrier = fonction(df, groupby='carrier')
-            print("\nNiveau par carrier :\n", par_carrier.apply(evaluer_kpi4))
-            print("\n=== Repartition statut KPI4 ===")
-            print(kpi4_detail(df))
-            print("\nPar carrier :\n", kpi4_detail(df, groupby='carrier'))
-            print("\n=== Repartition type_annulation ===")
-            print(kpi4_type_annulation(df))
-            print("\nPar carrier :\n", kpi4_type_annulation(df, groupby='carrier'))
 
         if nom_kpi == 'KPI5':
             valeur_globale = fonction(df)

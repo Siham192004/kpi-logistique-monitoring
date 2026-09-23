@@ -16,7 +16,7 @@ from engine.kpi_engine import (
     kpi1, kpi1_effectif, kpi1_distribution,
     kpi2, kpi2_effectif, kpi2_distribution,
     kpi3, kpi3_effectif, kpi3_par_shipment, kpi3_shipments_critiques,
-    kpi4, kpi4_effectif, kpi4_detail, kpi4_type_annulation,
+    kpi4, kpi4_effectif, kpi4_detail,
     kpi5, kpi5_effectif, kpi5_detail, kpi5_distribution,
     evaluer_kpi4, evaluer_kpi5,
     KPI_LABELS, KPI_OBJECTIFS, kpi3_detail,   
@@ -267,21 +267,14 @@ def get_kpi3_detail(db: Session, filtres: FiltresDashboardSchema) -> Kpi3DetailS
 
 def get_kpi4_detail(db: Session, filtres: FiltresDashboardSchema) -> Kpi4DetailSchema:
     df = get_data_kpis_filtres(
-        db,
-        mois=filtres.mois,
-        carrier=filtres.carrier,
-        annee=filtres.annee,
+        db, mois=filtres.mois, carrier=filtres.carrier, annee=filtres.annee,
     )
 
     valeur   = kpi4(df)
-    detail   = kpi4_detail(df)        # pd.Series index = "Annulé"/"Modifié"/"Normal"
-    type_ann = kpi4_type_annulation(df)  # pd.Series index = "Avant départ"/"Après départ"
+    detail   = kpi4_detail(df)
+    detail_dict = detail.to_dict() if not detail.empty else {}
 
-    detail_dict   = detail.to_dict()   if not detail.empty   else {}
-    type_ann_dict = type_ann.to_dict() if not type_ann.empty else {}
-
-    total = len(df)
-
+    total       = len(df)
     nb_annules  = int(detail_dict.get("Annulé",  0))
     nb_modifies = int(detail_dict.get("Modifié", 0))
     nb_normaux  = int(detail_dict.get("Normal",  0))
@@ -290,11 +283,26 @@ def get_kpi4_detail(db: Session, filtres: FiltresDashboardSchema) -> Kpi4DetailS
     pct_modifies = round(nb_modifies / total * 100, 1) if total > 0 else 0
     pct_normaux  = round(nb_normaux  / total * 100, 1) if total > 0 else 0
 
-    nb_avant = int(type_ann_dict.get("Avant départ", 0))
-    nb_apres = int(type_ann_dict.get("Après départ", 0))
+    # ✅ NOUVEAU — Normal/Modifié/Annulé par mois pour le LineChart
+    MONTH_ORDER = ['January','February','March','April','May','June',
+                   'July','August','September','October','November','December']
 
-    pct_avant = round(nb_avant / nb_annules * 100, 1) if nb_annules > 0 else 0
-    pct_apres = round(nb_apres / nb_annules * 100, 1) if nb_annules > 0 else 0
+    par_mois_raw = kpi4_detail(df, groupby='month')  # MultiIndex (month, statut)
+    par_mois = []
+    if not par_mois_raw.empty:
+        par_mois_df = par_mois_raw.reset_index()
+        par_mois_df.columns = ['month', 'statut', 'count']
+        pivot = par_mois_df.pivot(index='month', columns='statut', values='count').fillna(0)
+        pivot = pivot.reindex(
+            [m for m in MONTH_ORDER if m in pivot.index]
+        )
+        for month, row in pivot.iterrows():
+            par_mois.append({
+                "month":   month[:3],   # Jan, Feb...
+                "normal":  int(row.get("Normal",  0)),
+                "modifie": int(row.get("Modifié", 0)),
+                "annule":  int(row.get("Annulé",  0)),
+            })
 
     return Kpi4DetailSchema(
         valeur=valeur,
@@ -303,13 +311,10 @@ def get_kpi4_detail(db: Session, filtres: FiltresDashboardSchema) -> Kpi4DetailS
         nb_annules=nb_annules,
         nb_modifies=nb_modifies,
         nb_normaux=nb_normaux,
-        nb_avant_depart=nb_avant,
-        nb_apres_depart=nb_apres,
         pct_annules=pct_annules,
         pct_modifies=pct_modifies,
         pct_normaux=pct_normaux,
-        pct_avant_depart=pct_avant,
-        pct_apres_depart=pct_apres,
+        par_mois=par_mois,   # ✅ nouveau champ
     )
 
 # ═══════════════════════════════════════════════════════════════════════════════
