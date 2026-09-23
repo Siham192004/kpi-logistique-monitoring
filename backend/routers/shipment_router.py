@@ -30,6 +30,7 @@ from backend.services.shipment_service import (
     creer_shipment,
     modifier_shipment,
     supprimer_shipment,
+    lister_shipments_supprimes,
 )
 from backend.schemas.shipment_schema import (
     ShipmentCreateSchema,
@@ -81,11 +82,7 @@ def get_shipments_supprimes(
     db: Session = Depends(get_db),
     user: dict = Depends(get_current_operateur_ou_manager),
 ):
-    from backend.repositories.shipment_repository import get_shipments_supprimes
-    result = get_shipments_supprimes(db)
-    if result.empty:
-        return []
-    return result.to_dict(orient="records")
+    return lister_shipments_supprimes(db) 
 
 @router.get("/{shipment_id}", tags=["Shipments"])
 def get_shipment(

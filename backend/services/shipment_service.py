@@ -394,6 +394,14 @@ def supprimer_shipment(db: Session, shipment_id: int, suppresseur_id: int) -> De
         message="Erreur lors de la suppression."
     )
 
+def lister_shipments_supprimes(db: Session) -> list:
+    from backend.repositories.shipment_repository import get_shipments_supprimes
+    df = get_shipments_supprimes(db)
+    if df.empty:
+        return []
+    records = df.where(df.notna(), other=None).to_dict(orient="records")
+    return _sanitize(records)
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # RECALCUL BATCH — Colonnes dérivées pour données historiques (Fix 7)
 # ═══════════════════════════════════════════════════════════════════════════════
