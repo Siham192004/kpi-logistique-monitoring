@@ -270,39 +270,49 @@ def get_kpi4_detail(db: Session, filtres: FiltresDashboardSchema) -> Kpi4DetailS
         db, mois=filtres.mois, carrier=filtres.carrier, annee=filtres.annee,
     )
 
-    valeur   = kpi4(df)
-    detail   = kpi4_detail(df)
+    valeur      = kpi4(df)
+    detail      = kpi4_detail(df)
     detail_dict = detail.to_dict() if not detail.empty else {}
 
-    total       = len(df)
-    nb_annules  = int(detail_dict.get("Annulé",  0))
-    nb_modifies = int(detail_dict.get("Modifié", 0))
-    nb_normaux  = int(detail_dict.get("Normal",  0))
+    total        = len(df)
+    nb_annules   = int(detail_dict.get("Annulé",  0))
+    nb_modifies  = int(detail_dict.get("Modifié", 0))
+    nb_normaux   = int(detail_dict.get("Normal",  0))
 
     pct_annules  = round(nb_annules  / total * 100, 1) if total > 0 else 0
     pct_modifies = round(nb_modifies / total * 100, 1) if total > 0 else 0
     pct_normaux  = round(nb_normaux  / total * 100, 1) if total > 0 else 0
 
-    # ✅ NOUVEAU — Normal/Modifié/Annulé par mois pour le LineChart
     MONTH_ORDER = ['January','February','March','April','May','June',
                    'July','August','September','October','November','December']
 
-    par_mois_raw = kpi4_detail(df, groupby='month')  # MultiIndex (month, statut)
     par_mois = []
-    if not par_mois_raw.empty:
-        par_mois_df = par_mois_raw.reset_index()
-        par_mois_df.columns = ['month', 'statut', 'count']
-        pivot = par_mois_df.pivot(index='month', columns='statut', values='count').fillna(0)
-        pivot = pivot.reindex(
-            [m for m in MONTH_ORDER if m in pivot.index]
+    try:
+        df_copy = df.copy()
+        df_copy['est_annule']  = df_copy['shipment_status'] == 'Cancelled'
+        df_copy['est_modifie'] = (
+            (df_copy['etd_deviation'].fillna(0) >= 4) & (~df_copy['est_annule'])
         )
+        df_copy['statut_kpi4'] = 'Normal'
+        df_copy.loc[df_copy['est_modifie'], 'statut_kpi4'] = 'Modifié'
+        df_copy.loc[df_copy['est_annule'],  'statut_kpi4'] = 'Annulé'
+
+        grouped = df_copy.groupby(['month', 'statut_kpi4'], dropna=True).size().reset_index()
+        grouped.columns = ['month', 'statut', 'count']
+
+        pivot = grouped.pivot(index='month', columns='statut', values='count').fillna(0)
+        pivot = pivot.reindex([m for m in MONTH_ORDER if m in pivot.index])
+
         for month, row in pivot.iterrows():
             par_mois.append({
-                "month":   month[:3],   # Jan, Feb...
+                "month":   month[:3],
                 "normal":  int(row.get("Normal",  0)),
                 "modifie": int(row.get("Modifié", 0)),
                 "annule":  int(row.get("Annulé",  0)),
             })
+    except Exception as e:
+        print(f"[KPI4] Erreur calcul par_mois: {e}")
+        par_mois = []
 
     return Kpi4DetailSchema(
         valeur=valeur,
@@ -314,9 +324,8 @@ def get_kpi4_detail(db: Session, filtres: FiltresDashboardSchema) -> Kpi4DetailS
         pct_annules=pct_annules,
         pct_modifies=pct_modifies,
         pct_normaux=pct_normaux,
-        par_mois=par_mois,   # ✅ nouveau champ
+        par_mois=par_mois,
     )
-
 # ═══════════════════════════════════════════════════════════════════════════════
 # DÉTAIL KPI5
 # ═══════════════════════════════════════════════════════════════════════════════
