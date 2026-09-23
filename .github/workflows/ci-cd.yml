@@ -27,15 +27,34 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      # ── BACKEND ────────────────────────────────────────────
       - name: Build & Push image backend
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: ./Dockerfile     # ← vérifie le nom exact de ton Dockerfile
+          file: ./Dockerfile
           push: true
           tags: harrouchasiham/kpi-backend:latest
 
-      - name: Trigger Render Deploy
+      # ── FRONTEND ───────────────────────────────────────────
+      - name: Build & Push image frontend
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile.frontend
+          push: true
+          tags: harrouchasiham/kpi-frontend:latest
+          build-args: |
+            VITE_WS_URL=wss://kpi-backend-latest.onrender.com
+            VITE_API_URL=https://kpi-backend-latest.onrender.com
+
+      # ── TRIGGER RENDER ─────────────────────────────────────
+      - name: Trigger Render Deploy Backend
         run: |
-          curl -X POST "${{ secrets.RENDER_DEPLOY_HOOK }}"
-          echo "✅ Deploy Render déclenché !"
+          curl -X POST "${{ secrets.RENDER_DEPLOY_HOOK}}"
+          echo "✅ Backend deploy déclenché !"
+
+      - name: Trigger Render Deploy Frontend
+        run: |
+          curl -X POST "${{ secrets.RENDER_DEPLOY_HOOK_FRONTEND }}"
+          echo "✅ Frontend deploy déclenché !"

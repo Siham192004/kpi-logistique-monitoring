@@ -49,9 +49,10 @@ export const Sidebar = () => {
     
     console.log('Connecting WS for user:', currentUser.id)  // debug
     
-    ws = new WebSocket(
-        `ws://localhost:3000/api/messages/ws/${currentUser.id}?token=${token}`
-    )
+    const WS_BASE = import.meta.env.VITE_WS_URL || 'wss://kpi-backend-latest.onrender.com'
+ws = new WebSocket(
+    `${WS_BASE}/api/messages/ws/${currentUser.id}?token=${token}`
+)
 
     ws.onopen = () => {
       // Ping toutes les 30s pour garder la connexion vivante
