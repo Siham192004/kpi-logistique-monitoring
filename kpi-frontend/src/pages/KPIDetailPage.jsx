@@ -158,12 +158,26 @@ export const KPIDetailPage = () => {
     { name: 'En retard',  value: detailData.nb_en_retard, color: '#ef4444' },
   ] : []
 
-  // Filtrage local du graphique mensuel par carrier — sans rechargement de la page
   const parMoisFiltered = (() => {
-    const all = Array.isArray(detailData?.par_mois) ? detailData.par_mois : []
-    if (!localCarrier) return all
-    return all.filter(row => row.carrier === localCarrier)
-  })()
+  const all = Array.isArray(detailData?.par_mois) ? detailData.par_mois : []
+  
+  if (!localCarrier) {
+    // Agréger toutes les lignes par mois
+    const byMonth = {}
+    all.forEach(row => {
+      if (!byMonth[row.month]) {
+        byMonth[row.month] = { month: row.month, normal: 0, modifie: 0, annule: 0 }
+      }
+      byMonth[row.month].normal  += row.normal
+      byMonth[row.month].modifie += row.modifie
+      byMonth[row.month].annule  += row.annule
+    })
+    return Object.values(byMonth)
+  }
+  
+  // Filtrer par carrier sélectionné
+  return all.filter(row => row.carrier === localCarrier)
+})()
 
   const NIVEAU_COLORS = {
     'On target': '#10b981',
