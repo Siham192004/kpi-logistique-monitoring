@@ -51,29 +51,30 @@ const RequireAuth = ({ children, roles }) => {
 
 /* ─── App ────────────────────────────────────────────────────────────────── */
 export default function App() {
-  const { token, user, setUser, logout } = useAuthStore()
+  const { token, user, setUser, logout, initWS } = useAuthStore()  // ← initWS
 
-  // ← tous les états en haut, avant tout return
   const [bootstrapped,   setBootstrapped] = useState(false)
   const [showSplash,     setShowSplash]   = useState(true)
   const handleSplashDone = useCallback(() => setShowSplash(false), [])
 
-  // Restaurer la session depuis le token (en parallèle du splash)
   useEffect(() => {
     if (!token) { setBootstrapped(true); return }
     apiFetch('/admin/me')
       .then(me => {
-        setUser({
+        const user = {
           id:               me.id,
           nom:              me.nom,
           prenom:           me.prenom,
           role:             me.nom_role,
           doit_changer_mdp: me.doit_changer_mdp,
-        })
+        }
+        setUser(user)
+        initWS(user.id)   // ✅ Lance le WS avec l'id frais après refresh de page
       })
       .catch(() => logout())
       .finally(() => setBootstrapped(true))
   }, [])
+
 
   // ← splash en premier, avant tout le reste
   if (showSplash)    return <SplashScreen onDone={handleSplashDone} />
