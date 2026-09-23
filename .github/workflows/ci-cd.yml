@@ -31,7 +31,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: ./Dockerfile.backend      # ← vérifie le nom exact de ton Dockerfile
+          file: ./Dockerfile     # ← vérifie le nom exact de ton Dockerfile
           push: true
           tags: harrouchasiham/kpi-backend:latest
 
