@@ -299,19 +299,22 @@ def get_kpi4_detail(db: Session, filtres: FiltresDashboardSchema) -> Kpi4DetailS
         df_copy.loc[df_copy['est_modifie'], 'statut_kpi4'] = 'Modifié'
         df_copy.loc[df_copy['est_annule'],  'statut_kpi4'] = 'Annulé'
 
-        grouped = df_copy.groupby(['month', 'statut_kpi4'], dropna=True).size().reset_index()
-        grouped.columns = ['month', 'statut', 'count']
+# ✅ Groupby par carrier + month + statut
+        grouped = df_copy.groupby(['carrier', 'month', 'statut_kpi4'], dropna=True).size().reset_index()
+        grouped.columns = ['carrier', 'month', 'statut', 'count']
 
-        pivot = grouped.pivot(index='month', columns='statut', values='count').fillna(0)
-        pivot = pivot.reindex([m for m in MONTH_ORDER if m in pivot.index])
+        for carrier_name, grp_carrier in grouped.groupby('carrier'):
+           pivot = grp_carrier.pivot(index='month', columns='statut', values='count').fillna(0)
+           pivot = pivot.reindex([m for m in MONTH_ORDER if m in pivot.index])
 
         for month, row in pivot.iterrows():
-            par_mois.append({
-                "month":   month[:3],
-                "normal":  int(row.get("Normal",  0)),
-                "modifie": int(row.get("Modifié", 0)),
-                "annule":  int(row.get("Annulé",  0)),
-            })
+          par_mois.append({
+            "carrier": carrier_name,
+            "month":   month[:3],
+            "normal":  int(row.get("Normal",  0)),
+            "modifie": int(row.get("Modifié", 0)),
+            "annule":  int(row.get("Annulé",  0)),
+        })
     except Exception as e:
         print(f"[KPI4] Erreur calcul par_mois: {e}")
         par_mois = []

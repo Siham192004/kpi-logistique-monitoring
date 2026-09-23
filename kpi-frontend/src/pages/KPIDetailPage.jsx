@@ -79,8 +79,8 @@ export const KPIDetailPage = () => {
   const [activeTab,         setActiveTab]         = useState(params.get('kpi') || 'KPI1')
   const [groupBy,           setGroupBy]           = useState('carrier')
   const [selectedYear,      setSelectedYear]      = useState('')
-  const [selectedCarrier,   setSelectedCarrier]   = useState('')
   const [carriers,          setCarriers]          = useState([])
+  const [localCarrier,      setLocalCarrier]      = useState('')
   const [chartData,         setChartData]         = useState(null)
   const [detailData,        setDetailData]        = useState(null)
   const [loading,           setLoading]           = useState(true)
@@ -113,8 +113,7 @@ export const KPIDetailPage = () => {
     setSelectedCategorie(null)
 
     const queryParts = []
-    if (selectedYear)    queryParts.push(`annee=${selectedYear}`)
-    if (selectedCarrier) queryParts.push(`carrier=${encodeURIComponent(selectedCarrier)}`)
+    if (selectedYear) queryParts.push(`annee=${selectedYear}`)
     const query = queryParts.length > 0 ? `?${queryParts.join('&')}` : ''
 
     const fetches = []
@@ -140,7 +139,7 @@ export const KPIDetailPage = () => {
     Promise.all(fetches).finally(() => { if (!cancelled) setLoading(false) })
 
     return () => { cancelled = true }
-  }, [activeTab, groupBy, selectedYear, selectedCarrier, location.key])
+  }, [activeTab, groupBy, selectedYear, location.key])
 
   const processedItems = (() => {
     const raw = chartData?.items || []
@@ -158,6 +157,13 @@ export const KPIDetailPage = () => {
     { name: "À l'heure", value: detailData.nb_a_lheure,  color: '#10b981' },
     { name: 'En retard',  value: detailData.nb_en_retard, color: '#ef4444' },
   ] : []
+
+  // Filtrage local du graphique mensuel par carrier — sans rechargement de la page
+  const parMoisFiltered = (() => {
+    const all = Array.isArray(detailData?.par_mois) ? detailData.par_mois : []
+    if (!localCarrier) return all
+    return all.filter(row => row.carrier === localCarrier)
+  })()
 
   const NIVEAU_COLORS = {
     'On target': '#10b981',
@@ -220,6 +226,19 @@ export const KPIDetailPage = () => {
 
         <div className={styles.tabHead}>
           <h2 className={styles.tabTitle}>{KPI_LABELS[activeTab]}</h2>
+
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <select
+              style={selectStyle}
+              value={selectedYear}
+              onChange={e => setSelectedYear(e.target.value)}
+            >
+              <option value="">Toutes les années</option>
+              {YEARS.map(year => (
+                <option key={year} value={year}>{year}</option>
+              ))}
+            </select>
+          </div>
         </div>
 
         {/* Charts KPI1/2/4/5 */}
@@ -353,8 +372,8 @@ export const KPIDetailPage = () => {
                 <h3 className={styles.chartTitle} style={{ margin: 0 }}>Évolution mensuelle des statuts</h3>
                 <select
                   style={selectStyle}
-                  value={selectedCarrier}
-                  onChange={e => setSelectedCarrier(e.target.value)}
+                  value={localCarrier}
+                  onChange={e => setLocalCarrier(e.target.value)}
                 >
                   <option value="">Tous les carriers</option>
                   {carriers.map(c => (
@@ -364,7 +383,7 @@ export const KPIDetailPage = () => {
               </div>
               {Array.isArray(detailData.par_mois) && detailData.par_mois.length > 0 ? (
                 <ResponsiveContainer width="100%" height={220}>
-                  <LineChart data={detailData.par_mois} margin={{ top: 8, right: 16, left: -16, bottom: 8 }}>
+                  <LineChart data={parMoisFiltered} margin={{ top: 8, right: 16, left: -16, bottom: 8 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" vertical={false} />
                     <XAxis dataKey="month" tick={{ fill: 'rgba(255,255,255,0.35)', fontSize: 11 }} tickLine={false} axisLine={false} />
                     <YAxis tick={{ fill: 'rgba(255,255,255,0.35)', fontSize: 11 }} tickLine={false} axisLine={false} allowDecimals={false} />
