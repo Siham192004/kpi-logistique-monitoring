@@ -57,6 +57,18 @@ def _evaluer_kpi1_2(valeur: float, objectif: float) -> str:
         return "To monitor"
     else:
         return "Critical"
+    
+
+def _evaluer_kpi3_global(v3: float) -> str:
+    """Niveau global KPI3 basé sur % shipments normaux — objectifs métier."""
+    if v3 is None:
+        return None
+    if v3 >= 85:
+        return "On target"
+    elif v3 >= 60:
+        return "To monitor"
+    else:
+        return "Critical"
 
 
 def _series_to_groupe_items(
@@ -148,9 +160,9 @@ def get_dashboard(db: Session, filtres: FiltresDashboardSchema) -> DashboardSche
         kpi_id="KPI3", label=KPI_LABELS["KPI3"], valeur=v3,
         valeur_affichee=f"{int(kpi3_effectif(df) - on_target_kpi3)} critiques" if total_kpi3 > 0 else "—",
         effectif=kpi3_effectif(df),
-        niveau=_evaluer_kpi1_2(v3, 100 - KPI_OBJECTIFS["KPI3"]["to_monitor"]),
+        niveau=_evaluer_kpi3_global(v3),
         objectif=float(100 - KPI_OBJECTIFS["KPI3"]["on_target"]),
-        objectif_texte="≥ 85% shipments On target (déviation ≤ 8j)",
+        objectif_texte="≥ 85% shipments On target (déviation ≤ 4j)"
     )
 
     v4 = kpi4(df)
