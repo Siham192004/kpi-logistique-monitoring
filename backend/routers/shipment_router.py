@@ -87,7 +87,10 @@ def get_shipments_supprimes(
     result = get_shipments_supprimes(db)
     if result.empty:
         return []
-    return result.to_dict(orient="records")
+    # Les valeurs NaN/NaT de Pandas ne sont pas des valeurs JSON valides et
+    # peuvent faire échouer la réponse FastAPI avec un 500.
+    result_json = result.astype(object).where(result.notna(), None)
+    return result_json.to_dict(orient="records")
 
 @router.get("/{shipment_id}", tags=["Shipments"])
 def get_shipment(
