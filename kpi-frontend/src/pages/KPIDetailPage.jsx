@@ -129,7 +129,7 @@ const handleExportPNG = () => {
     Promise.all(fetches).finally(() => { if (!cancelled) setLoading(false) })
 
     return () => { cancelled = true }                                    // ✅ dans le useEffect
-  }, [activeTab, groupBy, selectedYear, location.key, refreshVersion])   // Recharge aussi après un recalcul KPI
+  }, [activeTab, groupBy, selectedYear, location.key, refreshVersion])   // Recharge après une mise à jour des données
 
   useEffect(() => {
     const handleKpiDataUpdated = () => setRefreshVersion(version => version + 1)

@@ -15,7 +15,7 @@ Architecture :
 shipment_router → shipment_service → shipment_repository → db.py
 """
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, Query
 from typing import Optional
 from sqlalchemy.orm import Session
 
@@ -87,8 +87,7 @@ def get_shipments_supprimes(
     result = get_shipments_supprimes(db)
     if result.empty:
         return []
-    # Les valeurs NaN/NaT de Pandas ne sont pas des valeurs JSON valides et
-    # peuvent faire échouer la réponse FastAPI avec un 500.
+    # Convertir NaN/NaT Pandas en null JSON (sin quoi Starlette renvoie une 500).
     result_json = result.astype(object).where(result.notna(), None)
     return result_json.to_dict(orient="records")
 
@@ -109,8 +108,9 @@ def get_shipment(
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @router.post("/", status_code=201, tags=["Shipments"])
-async def create_shipment(
+def create_shipment(
     data: ShipmentCreateSchema,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     user: dict = Depends(get_current_operateur),
 ):
@@ -127,7 +127,7 @@ async def create_shipment(
     createur_id = id de l'opérateur connecté (extrait du token JWT).
     """
     shipment = creer_shipment(db, data, createur_id=user["id"])
-    await ws_manager.notifier_actualisation_kpi()
+    background_tasks.add_task(ws_manager.notifier_actualisation_kpi)
     return shipment
 
 
@@ -136,9 +136,10 @@ async def create_shipment(
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @router.put("/{shipment_id}", tags=["Shipments"])
-async def update_shipment(
+def update_shipment(
     shipment_id: int,
     data: ShipmentUpdateSchema,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     user: dict = Depends(get_current_operateur),
 ):
@@ -150,7 +151,7 @@ async def update_shipment(
     Retourne 404 si le shipment est introuvable.
     """
     shipment = modifier_shipment(db, shipment_id, data, modificateur_id=user["id"])
-    await ws_manager.notifier_actualisation_kpi()
+    background_tasks.add_task(ws_manager.notifier_actualisation_kpi)
     return shipment
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -158,8 +159,9 @@ async def update_shipment(
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @router.delete("/{shipment_id}", response_model=DeleteResponseSchema, tags=["Shipments"])
-async def delete_shipment(
+def delete_shipment(
     shipment_id: int,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     user: dict = Depends(get_current_operateur),
 ):
@@ -175,17 +177,18 @@ async def delete_shipment(
     """
     result = supprimer_shipment(db, shipment_id, suppresseur_id=user["id"])
     if result.success:
-        await ws_manager.notifier_actualisation_kpi()
+        background_tasks.add_task(ws_manager.notifier_actualisation_kpi)
     return result
 
 
 @router.post("/recalcul-derivees", tags=["Shipments"])
-async def recalculate_derived_columns(
+def recalculate_derived_columns(
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     user: dict = Depends(get_current_operateur),
 ):
-    """Recalcule les colonnes dérivées et actualise les dashboards connectés."""
+    """Recalcule les colonnes dérivées et notifie les dashboards connectés."""
     result = recalculer_toutes_colonnes_derivees(db)
     if result.get("updated", 0) > 0:
-        await ws_manager.notifier_actualisation_kpi()
+        background_tasks.add_task(ws_manager.notifier_actualisation_kpi)
     return result
