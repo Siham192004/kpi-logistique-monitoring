@@ -1,37 +1,11 @@
-"""
-Maritime Logistics ETL Pipeline — v3
-======================================
-Compatible avec : maritime_ml_dataset_merged.xlsx
 
-DIFFÉRENCES vs ETL d'origine
-------------------------------
-1. Corrections manuelles par index : abandonnées — le dataset "_merged" a des index
-   différents. Remplacé par correction AUTOMATIQUE étendue (heuristiques + règles).
-2. Les onglets Excel de corrections manuelles ne sont plus nécessaires.
-3. Détection d'inversion jour/mois : algo basé sur la cohérence inter-colonnes.
-4. Compatible dataset de N lignes (pas de hardcodage d'index).
-5. Toutes les colonnes dérivées ML sont calculées.
 
-COLONNES SOURCE ATTENDUES
---------------------------
-Carrier, Vessel, Port of Loading, Port of Discharge, Incoterm,
-Transit_Time, Frequency, Port of Discharge country,
-ETD, ATD, ETA, ATA, Volume Booked, Confirmed Volume, Charged Volume, Month
-
-COLONNES DÉRIVÉES PRODUITES
------------------------------
-shipment_status, type_annulation, Transit_Time_Reel,
-eta_deviation, etd_deviation, is_delayed, niveau_retard,
-volume_ratio_loaded, volume_ratio_allocated, charge_sans_allocation,
-alerte_outlier, Month (resynchronisé)
-"""
 
 import re
 import warnings
 import numpy as np
 import pandas as pd
 from dateutil import parser as dateutil_parser
-#from engine.weather_client import enrich_dataset_with_weather
 
 
 warnings.filterwarnings("ignore")
@@ -104,29 +78,6 @@ def detecter_annulations(df: pd.DataFrame) -> pd.DataFrame:
     df.loc[mask, "shipment_status"] = "Cancelled"
     return df
 
-
-def determiner_type_annulation(df: pd.DataFrame) -> pd.DataFrame:
-    df["type_annulation"] = "Non annulé"
-    is_cancelled = df["shipment_status"] == "Cancelled"
-
-    def is_cancel_str(col):
-        return df[col].astype(str).str.upper().str.strip() == "CANCELLED"
-
-    mask_avant = is_cancelled & (is_cancel_str("ETD") | is_cancel_str("ATD"))
-    df.loc[mask_avant, "type_annulation"] = "Avant départ"
-    # ✅ Avant départ → ATD, ETA, ATA doivent être NULL
-    df.loc[mask_avant, ["ATD", "ETA", "ATA"]] = np.nan
-
-    mask_apres = (
-        is_cancelled & ~mask_avant &
-        ~is_cancel_str("ATD") &
-        (is_cancel_str("ETA") | is_cancel_str("ATA"))
-    )
-    df.loc[mask_apres, "type_annulation"] = "Après départ"
-    # ✅ Après départ → ETA, ATA doivent être NULL (ATD conservé)
-    df.loc[mask_apres, ["ETA", "ATA"]] = np.nan
-
-    return df
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -650,8 +601,6 @@ def generer_rapport(df: pd.DataFrame) -> dict:
     rapport = {
         "total_lignes":          n,
         "cancelled":             int((df["shipment_status"] == "Cancelled").sum()),
-        "avant_depart":          int((df["type_annulation"] == "Avant départ").sum()),
-        "apres_depart":          int((df["type_annulation"] == "Après départ").sum()),
         "is_delayed_1":          int((df["is_delayed"] == 1).sum()),
         "is_delayed_0":          int((df["is_delayed"] == 0).sum()),
         "is_delayed_unknown":    int(df["is_delayed"].isna().sum()),
@@ -690,11 +639,8 @@ def run_etl(input_path: str, output_path: str) -> pd.DataFrame:
 
     # ── Annulations ──────────────────────────────────────────
     df = detecter_annulations(df)
-    df = determiner_type_annulation(df)
     n_cancel = (df["shipment_status"] == "Cancelled").sum()
-    print(f"\n[3] Annulations : {n_cancel} cancelled "
-          f"({(df['type_annulation']=='Avant départ').sum()} avant départ, "
-          f"{(df['type_annulation']=='Après départ').sum()} après départ)")
+    print(f"\n[3] Annulations : {n_cancel} cancelled ")
 
     # ── Dates ────────────────────────────────────────────────
     df = nettoyer_colonnes_dates(df)

@@ -58,7 +58,7 @@ COLONNES_SHIPMENT = {
     "etd", "atd", "eta", "ata",
     "incoterm", "volume_booked", "confirmed_volume", "charged_volume",
     "transit_time", "frequency", "month", "year",
-    "shipment_status", "type_annulation",
+    "shipment_status",
     "transit_time_reel", "eta_deviation", "etd_deviation",
     "is_delayed", "volume_ratio_loaded", "volume_ratio_allocated_booked",
     "niveau_retard", "vessel_id", "createur_id",
@@ -195,11 +195,31 @@ def _calculer_colonnes_derivees(data: dict) -> dict:
     return derivees
 
 
-def _colonnes_derivees_vides() -> dict:
-    """Retourne les colonnes dérivées à NULL pour un shipment Cancelled."""
+def _colonnes_derivees_vides(data: dict = None) -> dict:
+    """Retourne les colonnes dérivées à NULL SAUF month et year calculés depuis ETD."""
+    month = None
+    year = None
+
+    if data:
+        etd = data.get("etd")
+        if etd:
+            if isinstance(etd, str):
+                etd = pd.to_datetime(etd, errors="coerce")
+            elif isinstance(etd, date):
+                etd = pd.Timestamp(etd)
+            if pd.notna(etd):
+                mois_fr = {
+                    1: "Janvier", 2: "Février", 3: "Mars",
+                    4: "Avril", 5: "Mai", 6: "Juin",
+                    7: "Juillet", 8: "Août", 9: "Septembre",
+                    10: "Octobre", 11: "Novembre", 12: "Décembre",
+                }
+                month = mois_fr[etd.month]
+                year = etd.year
+
     return {
-        "month":                         None,
-        "year":                          None,
+        "month":                         month,  # ✅ calculé depuis ETD
+        "year":                          year,   # ✅ calculé depuis ETD
         "transit_time_reel":             None,
         "eta_deviation":                 None,
         "etd_deviation":                 None,
@@ -208,10 +228,6 @@ def _colonnes_derivees_vides() -> dict:
         "volume_ratio_allocated_booked": None,
         "niveau_retard":                 None,
     }
-
-def _calculer_type_annulation(data: dict) -> str:
-    """ATD renseigné → Après départ, sinon → Avant départ."""
-    return "Après départ" if data.get("atd") else "Avant départ"
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -290,11 +306,9 @@ def creer_shipment(db: Session, data: ShipmentCreateSchema, createur_id: int) ->
 
 # 3. Colonnes dérivées
     if data.shipment_status.value == "Normal":
-       data_dict.update(_calculer_colonnes_derivees(data_dict))
-       data_dict["type_annulation"] = "Non annulé"                          # ✅
+       data_dict.update(_calculer_colonnes_derivees(data_dict))                         # ✅
     else:
-       data_dict.update(_colonnes_derivees_vides())
-       data_dict["type_annulation"] = _calculer_type_annulation(data_dict)  # ✅
+       data_dict.update(_colonnes_derivees_vides(data_dict))
 
     # 4. ✅ Filtrer : ne garder que les colonnes de la table shipment
     shipment_id = insert_shipment(db, _filtrer_colonnes_shipment(data_dict))
@@ -354,11 +368,9 @@ def modifier_shipment(db: Session, shipment_id: int, data: ShipmentUpdateSchema,
     # 5. Recalculer colonnes dérivées
     statut = donnees_finales.get("shipment_status", "Normal")
     if statut == "Normal":
-       donnees_finales.update(_calculer_colonnes_derivees(donnees_finales))
-       donnees_finales["type_annulation"] = "Non annulé"                             # ✅ reset si repassé Normal
+       donnees_finales.update(_calculer_colonnes_derivees(donnees_finales))                           # ✅ reset si repassé Normal
     else:
-       donnees_finales.update(_colonnes_derivees_vides())
-       donnees_finales["type_annulation"] = _calculer_type_annulation(donnees_finales)  # ✅ auto
+       donnees_finales.update(_colonnes_derivees_vides(donnees_finales))
 
     # 6. ✅ Filtrer : éliminer vessel_nom, carrier, id et tout champ inconnu
     #    avant d'appeler SQLAlchemy .update() — c'était la cause de l'erreur 500

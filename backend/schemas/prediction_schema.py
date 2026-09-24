@@ -78,7 +78,7 @@ class PredictionResponseSchema(BaseModel):
     # ── Résultat ML retourné par predire_retard() ─────────────────────────────
     prediction:         int    # 0 = à l'heure, 1 = en retard
     probabilite_retard: float  # ex: 73.5 (en %)
-    niveau_risque: str  # "Faible" / "Modéré" / "Élevé"  ← "Moyen" → "Modéré"
+    niveau_risque:str  # "Faible" / "Modéré" / "Élevé"  ← "Moyen" → "Modéré"
     label: str         # "À l'heure" / "À surveiller" / "En retard"  ← 3 valeurs
 
 
