@@ -51,7 +51,7 @@ MONTH_ORDER = [
 def _evaluer_kpi1_2(valeur: float, objectif: float) -> str:
     if valeur is None:
         return None
-    if valeur >= objectif:
+    if round(valeur, 1) >= objectif:   # ← arrondi à 1 décimale
         return "On target"
     elif valeur >= objectif - 5:
         return "To monitor"
