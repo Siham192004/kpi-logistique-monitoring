@@ -176,9 +176,9 @@ CATEGORIES_KPI3 = {
 def evaluer_kpi3(valeur):
     if pd.isna(valeur):
         return None
-    if valeur <= 8:
+    if valeur <= 4:
         return 'On target'
-    elif valeur <= 15:
+    elif valeur <= 8:
         return 'To monitor'
     else:
         return 'Critical'
@@ -189,12 +189,12 @@ def classifier_kpi3(etd_dev, eta_dev):
     etd = etd_dev if (etd_dev is not None and not pd.isna(etd_dev)) else 0
     eta = eta_dev if (eta_dev is not None and not pd.isna(eta_dev)) else 0
 
-    dep_normal   = etd <= 8
-    dep_monitor  = 8 < etd <= 15
-    dep_critical = etd > 15
-    arr_normal   = eta <= 8
-    arr_monitor  = 8 < eta <= 15
-    arr_critical = eta > 15
+    dep_normal   = etd <= 4
+    dep_monitor  = 4 < etd <= 8
+    dep_critical = etd > 8
+    arr_normal   = eta <= 4
+    arr_monitor  = 4 < eta <= 8
+    arr_critical = eta > 8
 
     if dep_normal and arr_normal:
         cat = 'Normal'
