@@ -61,7 +61,7 @@ ws = new WebSocket(
       }, 30000)
     }
 
-// Dans le useEffect, remplacer ws.onmessage :
+    // Le WebSocket transporte les notifications; les messages sont rechargés via l'API HTTP.
    ws.onmessage = (event) => {
     try {
         const data = JSON.parse(event.data)
@@ -213,4 +213,3 @@ ws = new WebSocket(
     </>
   )
 }
-

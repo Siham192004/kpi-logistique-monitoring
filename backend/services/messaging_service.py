@@ -69,22 +69,30 @@ class WebSocketManager:
             if not self.connexions[user_id]:
                 del self.connexions[user_id]
 
-    async def envoyer_badge(self, user_id: int, db: Session):
-        if user_id not in self.connexions:
+    async def envoyer_evenement(self, user_id: int, evenement: dict):
+        connexions = self.connexions.get(user_id)
+        if not connexions:
             return
-        non_lus = get_unread_count(db, user_id)
-        payload = json.dumps({"type": "badge", "non_lus": non_lus})
+        payload = json.dumps(evenement)
         connexions_mortes = set()
-        for ws in self.connexions[user_id]:
+        for ws in list(connexions):
             try:
                 await ws.send_text(payload)
             except Exception:
                 connexions_mortes.add(ws)
         for ws in connexions_mortes:
-            self.connexions[user_id].discard(ws)
+            self.deconnecter(user_id, ws)
+
+    async def envoyer_badge(self, user_id: int, db: Session):
+        if user_id not in self.connexions:
+            return
+        non_lus = get_unread_count(db, user_id)
+        await self.envoyer_evenement(user_id, {"type": "badge", "non_lus": non_lus})
 
     async def notifier_nouveau_message(self, destinataire_id: int, db: Session):
+        # Le frontend recharge la conversation via HTTP à la réception de cet événement.
         await self.envoyer_badge(destinataire_id, db)
+        await self.envoyer_evenement(destinataire_id, {"type": "nouveau_message"})
 
 
 # Instance globale
@@ -139,7 +147,7 @@ async def envoyer_message(
     - L'expéditeur ne peut pas s'envoyer un message à lui-même
     - Le destinataire doit exister et être actif
     - shipment_id optionnel (contexte logistique)
-    - Après envoi → notifie le destinataire via WebSocket (badge 🔔)
+    - Après envoi → notifie le destinataire via WebSocket (badge 🔔 et événement nouveau_message)
     """
     # Pas d'auto-message
     if data.destinataire_id == expediteur_id:
@@ -171,7 +179,7 @@ async def envoyer_message(
     )
     db.commit()
 
-    # Notifier le destinataire via WebSocket (badge 🔔)
+    # Notifier le destinataire via WebSocket pour mettre à jour badge et conversation.
     await ws_manager.notifier_nouveau_message(data.destinataire_id, db)
 
     return {"success": True, "message_id": message_id}

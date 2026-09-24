@@ -155,6 +155,7 @@ export const MessagesPage = () => {
 
   useEffect(() => {
     const handleNouveauMessage = async () => {
+        // Le WebSocket signale l'arrivée; charger le contenu réel via les routes HTTP.
         // Recharger les conversations
         await loadConversations(true)
         // Si une conversation est ouverte, recharger les messages
