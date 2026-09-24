@@ -72,9 +72,6 @@ ws = new WebSocket(
             // Déclencher un événement custom pour que MessagesPage recharge
             window.dispatchEvent(new CustomEvent('nouveau_message'))
         }
-        if (data.type === 'kpi_data_updated') {
-            window.dispatchEvent(new CustomEvent('kpi_data_updated'))
-        }
     } catch {}
 }
 
@@ -216,3 +213,4 @@ ws = new WebSocket(
     </>
   )
 }
+

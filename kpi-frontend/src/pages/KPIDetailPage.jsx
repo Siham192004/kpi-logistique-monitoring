@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { useSearchParams, useLocation } from 'react-router-dom'
 import { AppLayout } from '../components/layout/AppLayout'
 import { Header } from '../components/layout/Header'
@@ -8,14 +8,11 @@ import { SkeletonChart, SkeletonTable } from '../components/ui/Skeleton'
 import { apiFetch } from '../store/auth'
 import {
   BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, Legend
+  Tooltip, ResponsiveContainer, Legend, LineChart, Line
 } from 'recharts'
 import styles from './KPIDetailPage.module.css'
-import { useRef } from 'react'
 import html2canvas from 'html2canvas'
 import { Download } from 'lucide-react'
-
-
 
 const TABS = ['KPI1', 'KPI2', 'KPI3', 'KPI4', 'KPI5']
 const KPI_LABELS = {
@@ -26,6 +23,7 @@ const KPI_LABELS = {
   KPI5: 'Déviation ETA vs ATA',
 }
 const STATUS_COLORS = { 'On target': '#10b981', 'To monitor': '#f59e0b', 'Critical': '#ef4444' }
+const NIVEAU_COLORS = { 'On target': '#10b981', 'To monitor': '#f59e0b', 'Critical': '#ef4444' }
 
 const YEARS = Array.from({ length: 2050 - 2022 + 1 }, (_, i) => String(2022 + i))
 
@@ -78,26 +76,37 @@ const PieTooltip = ({ active, payload }) => {
 
 export const KPIDetailPage = () => {
   const [params] = useSearchParams()
-  const [activeTab,    setActiveTab]    = useState(params.get('kpi') || 'KPI1')
-  const [groupBy,      setGroupBy]      = useState('carrier')
-  const [selectedYear, setSelectedYear] = useState('')   // ← '' = toutes les années
-  const [chartData,    setChartData]    = useState(null)
-  const [detailData,   setDetailData]   = useState(null)
-  const [loading,      setLoading]      = useState(true)
-  const [selectedCategorie,  setSelectedCategorie]  = useState(null)
-  const [refreshVersion, setRefreshVersion] = useState(0)
+  const [activeTab,         setActiveTab]         = useState(params.get('kpi') || 'KPI1')
+  const [groupBy,           setGroupBy]           = useState('carrier')
+  const [selectedYear,      setSelectedYear]      = useState('')
+  const [carriers,          setCarriers]          = useState([])
+  const [localCarrier,      setLocalCarrier]      = useState('')
+  const [chartData,         setChartData]         = useState(null)
+  const [detailData,        setDetailData]        = useState(null)
+  const [parMoisData,       setParMoisData]       = useState([])   // ← état séparé
+  const [parMoisLoading,    setParMoisLoading]    = useState(false)
+  const [loading,           setLoading]           = useState(true)
+  const [selectedCategorie, setSelectedCategorie] = useState(null)
   const chartRef = useRef(null)
-  const location = useLocation() 
+  const location = useLocation()
 
-const handleExportPNG = () => {
-  html2canvas(chartRef.current).then(canvas => {
-    const a = document.createElement('a')
-    a.href = canvas.toDataURL('image/png')
-    a.download = `kpi-${activeTab}.png`
-    a.click()
-  })
-}
+  const handleExportPNG = () => {
+    html2canvas(chartRef.current).then(canvas => {
+      const a = document.createElement('a')
+      a.href = canvas.toDataURL('image/png')
+      a.download = `kpi-${activeTab}.png`
+      a.click()
+    })
+  }
 
+  // Charger les carriers une seule fois au montage
+  useEffect(() => {
+    apiFetch('/kpis/filtres')
+      .then(d => setCarriers(d.carriers || []))
+      .catch(() => {})
+  }, [])
+
+  // Fetch principal — NE dépend PAS de localCarrier
   useEffect(() => {
     let cancelled = false
 
@@ -106,36 +115,59 @@ const handleExportPNG = () => {
     setDetailData(null)
     setSelectedCategorie(null)
 
-    const y   = selectedYear ? `annee=${selectedYear}` : ''
-    const sep = y ? '?' : ''
+    const queryParts = []
+    if (selectedYear) queryParts.push(`annee=${selectedYear}`)
+    const query = queryParts.length > 0 ? `?${queryParts.join('&')}` : ''
 
     const fetches = []
 
     if (['KPI1', 'KPI2', 'KPI4', 'KPI5'].includes(activeTab)) {
-      const groupUrl = `/kpis/${activeTab}/groupe/${groupBy}${sep}${y}`
-      fetches.push(apiFetch(groupUrl).then(d => { if (!cancelled) setChartData(d) }))
+      fetches.push(apiFetch(`/kpis/${activeTab}/groupe/${groupBy}${query}`)
+        .then(d => { if (!cancelled) setChartData(d) }))
     }
 
     if (activeTab === 'KPI3') {
-      fetches.push(apiFetch(`/kpis/kpi3/detail${sep}${y}`).then(d => { if (!cancelled) setDetailData(d) }))
+      fetches.push(apiFetch(`/kpis/kpi3/detail${query}`)
+        .then(d => { if (!cancelled) setDetailData(d) }))
     }
     if (activeTab === 'KPI4') {
-      fetches.push(apiFetch(`/kpis/kpi4/detail${sep}${y}`).then(d => { if (!cancelled) setDetailData(d) }))
+      fetches.push(apiFetch(`/kpis/kpi4/detail${query}`)
+        .then(d => { if (!cancelled) setDetailData(d) }))
     }
     if (activeTab === 'KPI5') {
-      fetches.push(apiFetch(`/kpis/kpi5/detail${sep}${y}`).then(d => { if (!cancelled) setDetailData(d) }))
+      fetches.push(apiFetch(`/kpis/kpi5/detail${query}`)
+        .then(d => { if (!cancelled) setDetailData(d) }))
     }
 
     Promise.all(fetches).finally(() => { if (!cancelled) setLoading(false) })
 
-    return () => { cancelled = true }                                    // ✅ dans le useEffect
-  }, [activeTab, groupBy, selectedYear, location.key, refreshVersion])   // Recharge après une mise à jour des données
+    return () => { cancelled = true }
+  }, [activeTab, groupBy, selectedYear, location.key])
 
+  // Fetch dédié au graphe mensuel KPI4 — dépend de localCarrier
   useEffect(() => {
-    const handleKpiDataUpdated = () => setRefreshVersion(version => version + 1)
-    window.addEventListener('kpi_data_updated', handleKpiDataUpdated)
-    return () => window.removeEventListener('kpi_data_updated', handleKpiDataUpdated)
-  }, [])
+    if (activeTab !== 'KPI4') return
+
+    let cancelled = false
+    setParMoisLoading(true)
+
+    const queryParts = []
+    if (selectedYear)  queryParts.push(`annee=${selectedYear}`)
+    if (localCarrier)  queryParts.push(`carrier=${encodeURIComponent(localCarrier)}`)
+    const query = queryParts.length ? `?${queryParts.join('&')}` : ''
+
+    apiFetch(`/kpis/kpi4/par_mois${query}`)
+      .then(d => { if (!cancelled) setParMoisData(d.par_mois || []) })
+      .catch(() => { if (!cancelled) setParMoisData([]) })
+      .finally(() => { if (!cancelled) setParMoisLoading(false) })
+
+    return () => { cancelled = true }
+  }, [activeTab, selectedYear, localCarrier])
+
+  // Reset localCarrier quand on change d'onglet
+  useEffect(() => {
+    setLocalCarrier('')
+  }, [activeTab])
 
   const processedItems = (() => {
     const raw = chartData?.items || []
@@ -144,52 +176,54 @@ const handleExportPNG = () => {
   })()
 
   const kpi4PieData = detailData && activeTab === 'KPI4' ? [
-  { name: 'Normal',  value: detailData.pct_normaux,  color: '#10b981' },
-  { name: 'Modifié', value: detailData.pct_modifies, color: '#f59e0b' },
-  { name: 'Annulé',  value: detailData.pct_annules,  color: '#ef4444' },
-] : []
-
+    { name: 'Normal',  value: detailData.pct_normaux,  color: '#10b981' },
+    { name: 'Modifié', value: detailData.pct_modifies, color: '#f59e0b' },
+    { name: 'Annulé',  value: detailData.pct_annules,  color: '#ef4444' },
+  ] : []
 
   const kpi5PieData = detailData && activeTab === 'KPI5' ? [
     { name: "À l'heure", value: detailData.nb_a_lheure,  color: '#10b981' },
     { name: 'En retard',  value: detailData.nb_en_retard, color: '#ef4444' },
   ] : []
 
-  // Remplacer kpi3Columns et le bloc {activeTab === 'KPI3'} par :
+  const kpi3Columns = [
+    { key: 'shipment_id', label: '#',
+      render: v => <span style={{ fontSize: '11px', fontFamily: 'monospace' }}>#{v}</span> },
+    { key: 'carrier',          label: 'Carrier',   sortable: true },
+    { key: 'vessel_nom',       label: 'Navire',    sortable: true },
+    { key: 'month',            label: 'Mois',      sortable: true },
+    { key: 'etd_deviation',    label: 'Dév. ETD',  sortable: true, align: 'right',
+      render: v => v != null ? `${v.toFixed(1)} j` : '—' },
+    { key: 'eta_deviation',    label: 'Dév. ETA',  sortable: true, align: 'right',
+      render: v => v != null ? `${v.toFixed(1)} j` : '—' },
+    { key: 'categorie_metier', label: 'Catégorie', sortable: true,
+      render: v => v || '—' },
+    { key: 'niveau_global',    label: 'Niveau',
+      render: v => v
+        ? <Badge variant={niveauToBadge(v)} size="sm">{niveauLabel(v)}</Badge>
+        : '—'
+    },
+  ]
 
-const NIVEAU_COLORS = {
-  'On target': '#10b981',
-  'To monitor': '#f59e0b',
-  'Critical': '#ef4444',
-}
-
-const kpi3Columns = [
-  { key: 'shipment_id', label: '#',
-    render: v => <span style={{ fontSize: '11px', fontFamily: 'monospace' }}>#{v}</span> },
-  { key: 'carrier',           label: 'Carrier',   sortable: true },
-  { key: 'vessel_nom',        label: 'Navire',    sortable: true },
-  { key: 'month',             label: 'Mois',      sortable: true },
-  { key: 'etd_deviation',     label: 'Dév. ETD',  sortable: true, align: 'right',
-    render: v => v != null ? `${v.toFixed(1)} j` : '—' },
-  { key: 'eta_deviation',     label: 'Dév. ETA',  sortable: true, align: 'right',
-    render: v => v != null ? `${v.toFixed(1)} j` : '—' },
-  { key: 'categorie_metier',  label: 'Catégorie', sortable: true,
-    render: v => v || '—' },
-  { key: 'niveau_global',     label: 'Niveau',
-    render: v => v
-      ? <Badge variant={niveauToBadge(v)} size="sm">{niveauLabel(v)}</Badge>
-      : '—'
-  },
-]
+  const selectStyle = {
+    background: 'var(--color-surface-2)',
+    border: '1px solid var(--color-border)',
+    borderRadius: 'var(--radius-md)',
+    color: 'var(--color-text-primary)',
+    fontSize: 12,
+    padding: '5px 10px',
+    cursor: 'pointer',
+  }
 
   return (
     <AppLayout>
-      <Header title="Analyse KPI" subtitle="Détail et distribution par indicateur" 
-      actions={
-    <button onClick={handleExportPNG} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 'var(--radius-md)', background: 'var(--color-surface-2)', border: '1px solid var(--color-border)', color: 'var(--color-text-primary)', cursor: 'pointer', fontSize: 12 }}>
-      <Download size={13}/> PNG
-    </button>
-  }/>
+      <Header title="Analyse KPI" subtitle="Détail et distribution par indicateur"
+        actions={
+          <button onClick={handleExportPNG} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 'var(--radius-md)', background: 'var(--color-surface-2)', border: '1px solid var(--color-border)', color: 'var(--color-text-primary)', cursor: 'pointer', fontSize: 12 }}>
+            <Download size={13}/> PNG
+          </button>
+        }
+      />
 
       <div className={styles.tabs}>
         {TABS.map(tab => (
@@ -207,18 +241,18 @@ const kpi3Columns = [
 
         <div className={styles.tabHead}>
           <h2 className={styles.tabTitle}>{KPI_LABELS[activeTab]}</h2>
-
-          {/* ✅ Sélecteur année — toujours visible */}
-          <select
-            className={styles.yearSelect}
-            value={selectedYear}
-            onChange={e => setSelectedYear(e.target.value)}
-          >
-            <option value="">Toutes les années</option>
-            {YEARS.map(year => (
-              <option key={year} value={year}>{year}</option>
-            ))}
-          </select>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <select
+              style={selectStyle}
+              value={selectedYear}
+              onChange={e => setSelectedYear(e.target.value)}
+            >
+              <option value="">Toutes les années</option>
+              {YEARS.map(year => (
+                <option key={year} value={year}>{year}</option>
+              ))}
+            </select>
+          </div>
         </div>
 
         {/* Charts KPI1/2/4/5 */}
@@ -268,68 +302,60 @@ const kpi3Columns = [
 
         {/* KPI3 */}
         {activeTab === 'KPI3' && (
-  <div>
-    {/* Répartition 7 catégories */}
-    {loading && <SkeletonTable rows={3} cols={4} />}
-    {!loading && Array.isArray(detailData?.repartition) && (
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '20px' }}>
-        {detailData.repartition.map((item, i) => (
-  <div key={i}
-    onClick={() => setSelectedCategorie(
-      selectedCategorie === item.categorie ? null : item.categorie
-    )}
-    style={{
-      background: 'var(--color-surface)',
-      border: `2px solid ${
-        selectedCategorie === item.categorie
-          ? NIVEAU_COLORS[item.niveau]
-          : item.nombre > 0 ? NIVEAU_COLORS[item.niveau] + '40' : 'var(--color-border)'
-      }`,
-      borderRadius: 'var(--radius-md)',
-      padding: '10px 14px',
-      minWidth: '160px',
-      flex: '1',
-      cursor: item.nombre > 0 ? 'pointer' : 'default',
-      opacity: selectedCategorie && selectedCategorie !== item.categorie ? 0.45 : 1,
-      transition: 'all 0.15s ease',
-    }}>
-            <div style={{
-              fontSize: '22px',
-              fontWeight: 700,
-              color: item.nombre > 0 ? NIVEAU_COLORS[item.niveau] : 'var(--color-text-tertiary)',
-            }}>
-              {item.nombre}
-            </div>
-            <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginTop: '4px' }}>
-              {item.categorie}
-            </div>
-            <Badge
-              variant={niveauToBadge(item.niveau)}
-              size="sm"
-              style={{ marginTop: '6px' }}
-            >
-              {niveauLabel(item.niveau)}
-            </Badge>
+          <div>
+            {loading && <SkeletonTable rows={3} cols={4} />}
+            {!loading && Array.isArray(detailData?.repartition) && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '20px' }}>
+                {detailData.repartition.map((item, i) => (
+                  <div key={i}
+                    onClick={() => setSelectedCategorie(
+                      selectedCategorie === item.categorie ? null : item.categorie
+                    )}
+                    style={{
+                      background: 'var(--color-surface)',
+                      border: `2px solid ${
+                        selectedCategorie === item.categorie
+                          ? NIVEAU_COLORS[item.niveau]
+                          : item.nombre > 0 ? NIVEAU_COLORS[item.niveau] + '40' : 'var(--color-border)'
+                      }`,
+                      borderRadius: 'var(--radius-md)',
+                      padding: '10px 14px',
+                      minWidth: '160px',
+                      flex: '1',
+                      cursor: item.nombre > 0 ? 'pointer' : 'default',
+                      opacity: selectedCategorie && selectedCategorie !== item.categorie ? 0.45 : 1,
+                      transition: 'all 0.15s ease',
+                    }}>
+                    <div style={{
+                      fontSize: '22px', fontWeight: 700,
+                      color: item.nombre > 0 ? NIVEAU_COLORS[item.niveau] : 'var(--color-text-tertiary)',
+                    }}>
+                      {item.nombre}
+                    </div>
+                    <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', marginTop: '4px' }}>
+                      {item.categorie}
+                    </div>
+                    <Badge variant={niveauToBadge(item.niveau)} size="sm" style={{ marginTop: '6px' }}>
+                      {niveauLabel(item.niveau)}
+                    </Badge>
+                  </div>
+                ))}
+              </div>
+            )}
+            {!loading && (
+              <DataTable
+                columns={kpi3Columns}
+                data={(() => {
+                  const all = Array.isArray(detailData?.shipments_critiques) ? detailData.shipments_critiques : []
+                  if (!selectedCategorie) return all
+                  return all.filter(s => s.categorie_metier === selectedCategorie)
+                })()}
+                rowKey="shipment_id"
+                emptyMessage="Aucun shipment pour cette catégorie"
+              />
+            )}
           </div>
-        ))}
-      </div>
-    )}
-
-    {/* Tableau shipments critiques */}
-    {!loading && (
-      <DataTable
-  columns={kpi3Columns}
-  data={(() => {
-    const all = Array.isArray(detailData?.shipments_critiques) ? detailData.shipments_critiques : []
-    if (!selectedCategorie) return all
-    return all.filter(s => s.categorie_metier === selectedCategorie)
-  })()}
-  rowKey="shipment_id"
-  emptyMessage="Aucun shipment pour cette catégorie"
-/>
-    )}
-  </div>
-)}
+        )}
 
         {/* KPI4 */}
         {activeTab === 'KPI4' && detailData && (
@@ -354,70 +380,89 @@ const kpi3Columns = [
                 </PieChart>
               </ResponsiveContainer>
             </div>
+
             <div className={styles.chartCard}>
-              <h3 className={styles.chartTitle}>Avant / après départ</h3>
-              <div className={styles.kpi4Stats}>
-                <div className={styles.bigStat}>
-                  <span className={styles.bigStatVal}>{detailData.nb_avant_depart}</span>
-                  <span className={styles.bigStatLabel}>Avant départ</span>
-                </div>
-                <div className={styles.divider} />
-                <div className={styles.bigStat}>
-                  <span className={styles.bigStatVal} style={{ color: 'var(--color-danger)' }}>{detailData.nb_apres_depart}</span>
-                  <span className={styles.bigStatLabel}>Après départ</span>
-                </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                <h3 className={styles.chartTitle} style={{ margin: 0 }}>Évolution mensuelle des statuts</h3>
+                <select
+                  style={selectStyle}
+                  value={localCarrier}
+                  onChange={e => setLocalCarrier(e.target.value)}
+                >
+                  <option value="">Tous les carriers</option>
+                  {carriers.map(c => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
               </div>
+
+              {parMoisLoading ? (
+                <SkeletonChart height={220} />
+              ) : parMoisData.length > 0 ? (
+                <ResponsiveContainer width="100%" height={220}>
+                  <LineChart data={parMoisData} margin={{ top: 8, right: 16, left: -16, bottom: 8 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" vertical={false} />
+                    <XAxis dataKey="month" tick={{ fill: 'rgba(255,255,255,0.35)', fontSize: 11 }} tickLine={false} axisLine={false} />
+                    <YAxis tick={{ fill: 'rgba(255,255,255,0.35)', fontSize: 11 }} tickLine={false} axisLine={false} allowDecimals={false} />
+                    <Tooltip contentStyle={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: 8, fontSize: 12 }} />
+                    <Legend wrapperStyle={{ fontSize: '12px' }} />
+                    <Line type="monotone" dataKey="normal"  name="Normal"  stroke="#10b981" strokeWidth={2} dot={{ r: 3, fill: '#10b981' }} activeDot={{ r: 5 }} />
+                    <Line type="monotone" dataKey="modifie" name="Modifié" stroke="#f59e0b" strokeWidth={2} dot={{ r: 3, fill: '#f59e0b' }} activeDot={{ r: 5 }} />
+                    <Line type="monotone" dataKey="annule"  name="Annulé"  stroke="#ef4444" strokeWidth={2} dot={{ r: 3, fill: '#ef4444' }} activeDot={{ r: 5 }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              ) : (
+                <div style={{ height: 220, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-text-tertiary)', fontSize: 13 }}>
+                  Aucune donnée mensuelle disponible
+                </div>
+              )}
             </div>
           </div>
         )}
 
         {/* KPI5 */}
-{activeTab === 'KPI5' && detailData && (
-  <div className={styles.row}>
-    <div className={styles.chartCard}>
-      <h3 className={styles.chartTitle}>Répartition ponctualité</h3>
-      <ResponsiveContainer width="100%" height={220}>
-        <PieChart>
-          <Pie data={kpi5PieData} dataKey="value" nameKey="name"
-            cx="50%" cy="50%" outerRadius={80} innerRadius={50} paddingAngle={3}>
-            {kpi5PieData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
-          </Pie>
-          <Tooltip content={<PieTooltip />} />
-          <Legend wrapperStyle={{ fontSize: '12px', color: 'var(--color-text-secondary)' }} />
-        </PieChart>
-      </ResponsiveContainer>
-    </div>
+        {activeTab === 'KPI5' && detailData && (
+          <div className={styles.row}>
+            <div className={styles.chartCard}>
+              <h3 className={styles.chartTitle}>Répartition ponctualité</h3>
+              <ResponsiveContainer width="100%" height={220}>
+                <PieChart>
+                  <Pie data={kpi5PieData} dataKey="value" nameKey="name"
+                    cx="50%" cy="50%" outerRadius={80} innerRadius={50} paddingAngle={3}>
+                    {kpi5PieData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+                  </Pie>
+                  <Tooltip content={<PieTooltip />} />
+                  <Legend wrapperStyle={{ fontSize: '12px', color: 'var(--color-text-secondary)' }} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
 
-    <div className={styles.chartCard}>
-      <h3 className={styles.chartTitle}>Taux de retard</h3>
-      <div className={styles.kpi4Stats}>
-        <div className={styles.bigStat}>
-          <span className={styles.bigStatVal} style={{ color: 'var(--color-success)' }}>
-            {detailData.pct_a_lheure != null
-              ? `${detailData.pct_a_lheure.toFixed(1)}%`
-              : '—'}
-          </span>
-          <span className={styles.bigStatLabel}>À l'heure</span>
-          <span style={{ fontSize: '11px', color: 'var(--color-text-tertiary)', marginTop: '4px' }}>
-            {detailData.nb_a_lheure} shipments
-          </span>
-        </div>
-        <div className={styles.divider} />
-        <div className={styles.bigStat}>
-          <span className={styles.bigStatVal} style={{ color: 'var(--color-danger)' }}>
-            {detailData.pct_en_retard != null
-              ? `${detailData.pct_en_retard.toFixed(1)}%`
-              : '—'}
-          </span>
-          <span className={styles.bigStatLabel}>En retard</span>
-          <span style={{ fontSize: '11px', color: 'var(--color-text-tertiary)', marginTop: '4px' }}>
-            {detailData.nb_en_retard} shipments
-          </span>
-        </div>
-      </div>
-    </div>
-  </div>
-)}
+            <div className={styles.chartCard}>
+              <h3 className={styles.chartTitle}>Taux de retard</h3>
+              <div className={styles.kpi4Stats}>
+                <div className={styles.bigStat}>
+                  <span className={styles.bigStatVal} style={{ color: 'var(--color-success)' }}>
+                    {detailData.pct_a_lheure != null ? `${detailData.pct_a_lheure.toFixed(1)}%` : '—'}
+                  </span>
+                  <span className={styles.bigStatLabel}>À l'heure</span>
+                  <span style={{ fontSize: '11px', color: 'var(--color-text-tertiary)', marginTop: '4px' }}>
+                    {detailData.nb_a_lheure} shipments
+                  </span>
+                </div>
+                <div className={styles.divider} />
+                <div className={styles.bigStat}>
+                  <span className={styles.bigStatVal} style={{ color: 'var(--color-danger)' }}>
+                    {detailData.pct_en_retard != null ? `${detailData.pct_en_retard.toFixed(1)}%` : '—'}
+                  </span>
+                  <span className={styles.bigStatLabel}>En retard</span>
+                  <span style={{ fontSize: '11px', color: 'var(--color-text-tertiary)', marginTop: '4px' }}>
+                    {detailData.nb_en_retard} shipments
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
       </div>
     </AppLayout>
