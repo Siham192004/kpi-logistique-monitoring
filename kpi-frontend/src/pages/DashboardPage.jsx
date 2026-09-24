@@ -77,6 +77,15 @@ export const DashboardPage = () => {
 
   useEffect(() => { loadDashboard() }, [loadDashboard])
 
+  useEffect(() => {
+    const handleKpiDataUpdated = () => {
+      loadDashboard()
+      apiFetch('/kpis/filtres').then(setFiltres).catch(() => {})
+    }
+    window.addEventListener('kpi_data_updated', handleKpiDataUpdated)
+    return () => window.removeEventListener('kpi_data_updated', handleKpiDataUpdated)
+  }, [loadDashboard])
+
   const pageRef = useRef(null)
 
 const handleExportPNG = () => {
@@ -167,4 +176,3 @@ const handleExportPNG = () => {
     </AppLayout>
   )
 }
-

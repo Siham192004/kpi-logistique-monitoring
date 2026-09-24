@@ -30,8 +30,9 @@ from backend.services.shipment_service import (
     creer_shipment,
     modifier_shipment,
     supprimer_shipment,
-    lister_shipments_supprimes,
+    recalculer_toutes_colonnes_derivees,
 )
+from backend.services.messaging_service import ws_manager
 from backend.schemas.shipment_schema import (
     ShipmentCreateSchema,
     ShipmentUpdateSchema,
@@ -82,7 +83,11 @@ def get_shipments_supprimes(
     db: Session = Depends(get_db),
     user: dict = Depends(get_current_operateur_ou_manager),
 ):
-    return lister_shipments_supprimes(db) 
+    from backend.repositories.shipment_repository import get_shipments_supprimes
+    result = get_shipments_supprimes(db)
+    if result.empty:
+        return []
+    return result.to_dict(orient="records")
 
 @router.get("/{shipment_id}", tags=["Shipments"])
 def get_shipment(
@@ -101,7 +106,7 @@ def get_shipment(
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @router.post("/", status_code=201, tags=["Shipments"])
-def create_shipment(
+async def create_shipment(
     data: ShipmentCreateSchema,
     db: Session = Depends(get_db),
     user: dict = Depends(get_current_operateur),
@@ -118,7 +123,9 @@ def create_shipment(
 
     createur_id = id de l'opérateur connecté (extrait du token JWT).
     """
-    return creer_shipment(db, data, createur_id=user["id"])
+    shipment = creer_shipment(db, data, createur_id=user["id"])
+    await ws_manager.notifier_actualisation_kpi()
+    return shipment
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -126,7 +133,7 @@ def create_shipment(
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @router.put("/{shipment_id}", tags=["Shipments"])
-def update_shipment(
+async def update_shipment(
     shipment_id: int,
     data: ShipmentUpdateSchema,
     db: Session = Depends(get_db),
@@ -139,14 +146,16 @@ def update_shipment(
     Les colonnes dérivées sont recalculées automatiquement par l'ETL.
     Retourne 404 si le shipment est introuvable.
     """
-    return modifier_shipment(db, shipment_id, data, modificateur_id=user["id"])
+    shipment = modifier_shipment(db, shipment_id, data, modificateur_id=user["id"])
+    await ws_manager.notifier_actualisation_kpi()
+    return shipment
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # SUPPRESSION — Opérateur uniquement
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @router.delete("/{shipment_id}", response_model=DeleteResponseSchema, tags=["Shipments"])
-def delete_shipment(
+async def delete_shipment(
     shipment_id: int,
     db: Session = Depends(get_db),
     user: dict = Depends(get_current_operateur),
@@ -161,4 +170,19 @@ def delete_shipment(
     - success=True  → "Shipment supprimé avec succès."
     - success=False → "Suppression impossible : N message(s) associé(s)."
     """
-    return supprimer_shipment(db, shipment_id,suppresseur_id=user["id"])
+    result = supprimer_shipment(db, shipment_id, suppresseur_id=user["id"])
+    if result.success:
+        await ws_manager.notifier_actualisation_kpi()
+    return result
+
+
+@router.post("/recalcul-derivees", tags=["Shipments"])
+async def recalculate_derived_columns(
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_operateur),
+):
+    """Recalcule les colonnes dérivées et actualise les dashboards connectés."""
+    result = recalculer_toutes_colonnes_derivees(db)
+    if result.get("updated", 0) > 0:
+        await ws_manager.notifier_actualisation_kpi()
+    return result

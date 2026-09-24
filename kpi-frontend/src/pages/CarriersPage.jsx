@@ -34,16 +34,23 @@ export const CarriersPage = () => {
   const [selectedAnnee, setSelectedAnnee]           = useState('')
   const [mensuelData, setMensuelData]               = useState([])
   const [loadingChart, setLoadingChart]             = useState(false)
+  const [refreshVersion, setRefreshVersion]         = useState(0)
   const anneesDisponibles                           = ['2024', '2025', '2026']
+
+  useEffect(() => {
+    const handleKpiDataUpdated = () => setRefreshVersion(version => version + 1)
+    window.addEventListener('kpi_data_updated', handleKpiDataUpdated)
+    return () => window.removeEventListener('kpi_data_updated', handleKpiDataUpdated)
+  }, [])
 
   useEffect(() => {
     apiFetch('/kpis/rapport-carriers')
       .then(data => {
         setCarriers(data)
-        if (data.length > 0) setSelected(data[0])
+        setSelected(current => data.find(item => item.carrier === current?.carrier) ?? data[0] ?? null)
       })
       .finally(() => setLoading(false))
-  }, [])
+  }, [refreshVersion])
 
   useEffect(() => {
     if (carriers.length > 0 && !selectedCarrierChart) {
