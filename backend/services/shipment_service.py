@@ -269,7 +269,7 @@ def obtenir_shipment(db: Session, shipment_id: int) -> dict:
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Shipment {shipment_id} introuvable."
         )
-    return shipment
+    return _sanitize(shipment)  # ← seul changement
 
 
 def lister_carriers(db: Session) -> list:
@@ -379,6 +379,29 @@ def modifier_shipment(db: Session, shipment_id: int, data: ShipmentUpdateSchema,
 
     # 7. Retourner le shipment mis à jour
     return get_shipment_by_id(db, shipment_id)
+
+
+def recalculer_cancelled(db: Session) -> dict:
+    df = get_all_shipments_avec_annules(db)
+    cancelled = df[df["shipment_status"] == "Cancelled"]
+    updated = 0
+    for _, row in cancelled.iterrows():
+        data = row.to_dict()
+        vides = _colonnes_derivees_vides(data)
+        update_shipment(db, int(row["id"]), {
+            "month":                         vides["month"],
+            "year":                          vides["year"],
+            "transit_time_reel":             None,
+            "eta_deviation":                 None,
+            "etd_deviation":                 None,
+            "is_delayed":                    None,
+            "volume_ratio_loaded":           None,
+            "volume_ratio_allocated_booked": None,
+            "niveau_retard":                 None,
+        })
+        updated += 1
+    db.commit()
+    return {"updated": updated, "message": f"{updated} Cancelled recalculés."}
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

@@ -192,3 +192,12 @@ def recalculate_derived_columns(
     if result.get("updated", 0) > 0:
         background_tasks.add_task(ws_manager.notifier_actualisation_kpi)
     return result
+
+
+@router.post("/recalcul-cancelled", tags=["Shipments"])
+def recalculate_cancelled(
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_operateur),
+):
+    from backend.services.shipment_service import recalculer_cancelled
+    return recalculer_cancelled(db)
