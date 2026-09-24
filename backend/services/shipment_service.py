@@ -315,7 +315,7 @@ def creer_shipment(db: Session, data: ShipmentCreateSchema, createur_id: int) ->
     db.commit()
 
     # 5. Retourner le shipment complet
-    return get_shipment_by_id(db, shipment_id)
+    return _sanitize(get_shipment_by_id(db, shipment_id)) 
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -378,7 +378,7 @@ def modifier_shipment(db: Session, shipment_id: int, data: ShipmentUpdateSchema,
     db.commit()
 
     # 7. Retourner le shipment mis à jour
-    return get_shipment_by_id(db, shipment_id)
+    return _sanitize(get_shipment_by_id(db, shipment_id))
 
 
 def recalculer_cancelled(db: Session) -> dict:
