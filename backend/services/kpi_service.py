@@ -150,7 +150,7 @@ def get_dashboard(db: Session, filtres: FiltresDashboardSchema) -> DashboardSche
         effectif=kpi3_effectif(df),
         niveau=_evaluer_kpi1_2(v3, 100 - KPI_OBJECTIFS["KPI3"]["to_monitor"]),
         objectif=float(100 - KPI_OBJECTIFS["KPI3"]["on_target"]),
-        objectif_texte=f"< {KPI_OBJECTIFS['KPI3']['on_target']}% de retards",
+        objectif_texte="≥ 85% shipments On target (déviation ≤ 8j)",
     )
 
     v4 = kpi4(df)
