@@ -82,7 +82,7 @@ La plateforme repose sur une architecture séparant clairement l'interface utili
 │       Supabase                                  │
 └───────────────────────────────────────────────────┘
 
-# 📂 Données
+📂 Données
 
 Les données logistiques utilisées pour le traitement ETL ne sont pas
 incluses dans le repository pour des raisons de confidentialité.
