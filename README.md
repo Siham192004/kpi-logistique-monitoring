@@ -81,3 +81,8 @@ La plateforme repose sur une architecture séparant clairement l'interface utili
 │       PostgreSQL (production)                    │
 │       Supabase                                  │
 └───────────────────────────────────────────────────┘
+
+## 📂 Données
+
+Les données logistiques utilisées pour le traitement ETL ne sont pas
+incluses dans le repository pour des raisons de confidentialité.
