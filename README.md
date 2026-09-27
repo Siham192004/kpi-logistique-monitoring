@@ -58,7 +58,7 @@ La plateforme repose sur une architecture séparant clairement l'interface utili
 │                   Messagerie                     │
 └───────────────────────┬───────────────────────────┘
                         │
-                 REST API / WebSocket
+                    REST API 
                         │
                         ▼
 ┌───────────────────────────────────────────────────┐
