@@ -40,49 +40,25 @@ La plateforme répond aux principaux objectifs suivants :
 - Conteneuriser et déployer la solution dans un environnement de production.
 
 ---
+## 🏗️ Architecture
 
-# 🏗️ Architecture
+```mermaid
+flowchart TB
+    U["👤 Utilisateur"]
 
-La plateforme repose sur une architecture séparant clairement l'interface utilisateur, la logique métier et la persistance des données.
+    F["🖥️ FRONTEND<br/>React<br/><br/>Dashboard • Shipments • Prediction • Administration • Messagerie"]
 
-```text
-                         UTILISATEUR
-                              │
-                              ▼
-┌───────────────────────────────────────────────────┐
-│                    FRONTEND                       │
-│                     React                         │
-│                                                   │
-│  Dashboard │ Shipments │ Prediction │ Admin      │
-│                       │                           │
-│                   Messagerie                     │
-└───────────────────────┬───────────────────────────┘
-                        │
-                    REST API 
-                        │
-                        ▼
-┌───────────────────────────────────────────────────┐
-│                    BACKEND                        │
-│                   FastAPI                         │
-│                                                   │
-│  Routers │ Services │ Repository │ Validation    │
-│                                                   │
-│  KPI Engine │ ETL │ Machine Learning              │
-│  Authentication │ RBAC │ WebSocket               │
-└───────────────────────┬───────────────────────────┘
-                        │
-                    SQLAlchemy
-                        │
-                        ▼
-┌───────────────────────────────────────────────────┐
-│                  BASE DE DONNÉES                  │
-│                                                   │
-│       SQLite (développement/local)               │
-│       PostgreSQL (production)                    │
-│       Supabase                                  │
-└───────────────────────────────────────────────────┘
+    B["⚙️ BACKEND<br/>FastAPI<br/><br/>Routers • Services • Repositories • Schemas<br/><br/>KPI Engine • ETL • Machine Learning<br/>Authentication • RBAC • WebSocket"]
 
-📂 Données
+    D["🗄️ BASE DE DONNÉES<br/><br/>SQLite — développement / local<br/>PostgreSQL — production<br/>Supabase"]
 
-Les données logistiques utilisées pour le traitement ETL ne sont pas
-incluses dans le repository pour des raisons de confidentialité.
+    U --> F
+    F -->|"REST API / WebSocket"| B
+    B -->|"SQLAlchemy"| D
+```
+
+### 📂 Données
+
+Les données logistiques utilisées pour le traitement ETL ne sont pas incluses dans le repository pour des raisons de confidentialité.
+
+
