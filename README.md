@@ -53,7 +53,7 @@ flowchart TB
     D["🗄️ BASE DE DONNÉES<br/><br/>SQLite — développement / local<br/>PostgreSQL — production<br/>Supabase"]
 
     U --> F
-    F -->|"REST API / WebSocket"| B
+    F -->|"REST API"| B
     B -->|"SQLAlchemy"| D
 ```
 
