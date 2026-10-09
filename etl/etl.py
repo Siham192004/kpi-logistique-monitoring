@@ -151,23 +151,6 @@ def imputer_transit_time(df: pd.DataFrame) -> pd.DataFrame:
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# 6. IMPUTATION PORT OF DISCHARGE COUNTRY
-# ──────────────────────────────────────────────────────────────────────────────
-
-def imputer_pays_destination(df: pd.DataFrame) -> pd.DataFrame:
-    if "Port of Discharge country" not in df.columns:
-        return df
-    lookup = (
-        df.dropna(subset=["Port of Discharge country"])
-        .groupby("Port of Discharge")["Port of Discharge country"]
-        .agg(lambda x: x.mode().iloc[0] if not x.mode().empty else np.nan)
-    )
-    mask = df["Port of Discharge country"].isna()
-    df.loc[mask, "Port of Discharge country"] = df.loc[mask, "Port of Discharge"].map(lookup)
-    return df
-
-
-# ──────────────────────────────────────────────────────────────────────────────
 # 7. CORRECTION AUTOMATIQUE ÉTENDUE DES DATES
 #    Remplace les corrections manuelles par index (incompatibles avec _merged)
 # ──────────────────────────────────────────────────────────────────────────────
@@ -293,90 +276,6 @@ def corriger_inversion_jour_mois(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-# 8. RECALCUL DES DATES MANQUANTES
-# ──────────────────────────────────────────────────────────────────────────────
-
-def _rand(choices, probs):
-    return int(np.random.choice(choices, p=probs))
-
-
-def recalculer_eta_manquante(df: pd.DataFrame) -> pd.DataFrame:
-    for idx in df.index:
-        if pd.notna(df.at[idx, "ETA"]):
-            continue
-        tt = df.at[idx, "Transit_Time"]
-        if pd.isna(tt):
-            continue
-        if pd.notna(df.at[idx, "ETD"]):
-            eta = df.at[idx, "ETD"] + pd.Timedelta(days=int(tt))
-            if pd.notna(df.at[idx, "ATD"]) and eta <= df.at[idx, "ATD"]:
-                eta = df.at[idx, "ATD"] + pd.Timedelta(days=1)
-            df.at[idx, "ETA"] = eta
-        elif pd.notna(df.at[idx, "ATD"]):
-            dev = _rand([0, 1, 2, 3, 4], [0.35, 0.25, 0.18, 0.14, 0.08])
-            eta = df.at[idx, "ATD"] - pd.Timedelta(days=dev) + pd.Timedelta(days=int(tt))
-            if eta <= df.at[idx, "ATD"]:
-                eta = df.at[idx, "ATD"] + pd.Timedelta(days=1)
-            df.at[idx, "ETA"] = eta
-    return df
-
-
-def recalculer_etd_manquante(df: pd.DataFrame) -> pd.DataFrame:
-    devs  = [-2, -1, 0, 1, 2, 3, 4]
-    probs = [0.05, 0.10, 0.35, 0.20, 0.15, 0.10, 0.05]
-    for idx in df.index:
-        if pd.notna(df.at[idx, "ETD"]):
-            continue
-        tt = df.at[idx, "Transit_Time"]
-        if pd.isna(tt):
-            continue
-        if pd.notna(df.at[idx, "ATD"]):
-            df.at[idx, "ETD"] = df.at[idx, "ATD"] + pd.Timedelta(days=_rand(devs, probs))
-        elif pd.notna(df.at[idx, "ETA"]):
-            df.at[idx, "ETD"] = df.at[idx, "ETA"] - pd.Timedelta(days=int(tt))
-        elif pd.notna(df.at[idx, "ATA"]):
-            df.at[idx, "ETD"] = df.at[idx, "ATA"] - pd.Timedelta(days=int(tt) + _rand(devs, probs))
-    return df
-
-
-def recalculer_atd_manquante(df: pd.DataFrame) -> pd.DataFrame:
-    devs  = [-2, -1, 0, 1, 2, 3, 4]
-    probs = [0.05, 0.10, 0.35, 0.20, 0.15, 0.10, 0.05]
-    for idx in df.index:
-        if pd.notna(df.at[idx, "ATD"]):
-            continue
-        tt = df.at[idx, "Transit_Time"]
-        if pd.notna(df.at[idx, "ETD"]):
-            atd = df.at[idx, "ETD"] + pd.Timedelta(days=_rand(devs, probs))
-            if pd.notna(df.at[idx, "ATA"]) and atd >= df.at[idx, "ATA"]:
-                atd = df.at[idx, "ATA"] - pd.Timedelta(days=1)
-            df.at[idx, "ATD"] = atd
-        elif pd.notna(df.at[idx, "ATA"]) and pd.notna(tt):
-            atd = df.at[idx, "ATA"] - pd.Timedelta(days=int(tt))
-            if atd >= df.at[idx, "ATA"]:
-                atd = df.at[idx, "ATA"] - pd.Timedelta(days=1)
-            df.at[idx, "ATD"] = atd
-    return df
-
-
-def recalculer_ata_manquante(df: pd.DataFrame) -> pd.DataFrame:
-    ecarts = [-3, -2, -1, 0, 1, 2, 3, 4, 5]
-    probs  = [0.03, 0.05, 0.07, 0.40, 0.18, 0.12, 0.08, 0.05, 0.02]
-    for idx in df[df["ATA"].isna() & df["ATD"].notna() & df["Transit_Time"].notna()].index:
-        e   = _rand(ecarts, probs)
-        ata = df.at[idx, "ATD"] + pd.Timedelta(days=int(df.at[idx, "Transit_Time"]) + e)
-        if ata <= df.at[idx, "ATD"]:
-            ata = df.at[idx, "ATD"] + pd.Timedelta(days=1)
-        df.at[idx, "ATA"] = ata
-    for idx in df[df["ATA"].isna() & df["ETA"].notna()].index:
-        e   = _rand(ecarts, probs)
-        ata = df.at[idx, "ETA"] + pd.Timedelta(days=e)
-        if pd.notna(df.at[idx, "ATD"]) and ata <= df.at[idx, "ATD"]:
-            ata = df.at[idx, "ATD"] + pd.Timedelta(days=1)
-        df.at[idx, "ATA"] = ata
-    return df
-
 
 # ──────────────────────────────────────────────────────────────────────────────
 # 9. TRANSIT TIME RÉEL
@@ -495,13 +394,6 @@ def calculer_colonnes_derivees(df: pd.DataFrame) -> pd.DataFrame:
         df["Transit_Time_Reel"] > df["Transit_Time"] + 30,
         df["Transit_Time_Reel"] > df["Transit_Time"] + 5,
     ]
-    df["niveau_retard"] = np.select(
-        conditions,
-        ["Retard critique", "Retard important", "Retard léger"],
-        default="A temps"
-    )
-    # ✅ Annulés → niveau_retard = NULL
-    df.loc[df["shipment_status"] == "Cancelled", "niveau_retard"] = np.nan
 
     # Ratios volumes
     df["volume_ratio_loaded"] = np.where(
@@ -575,24 +467,6 @@ def calculer_year(df: pd.DataFrame) -> pd.DataFrame:
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# 14. SUPPRESSION LIGNES SANS DONNÉES UTILES
-# ──────────────────────────────────────────────────────────────────────────────
-
-def supprimer_lignes_sans_dates(df: pd.DataFrame) -> pd.DataFrame:
-    mask = (
-        df["ETD"].isna() & df["ATD"].isna() &
-        df["ETA"].isna() & df["ATA"].isna() &
-        (df["shipment_status"] != "Cancelled")
-    )
-    avant = len(df)
-    df = df[~mask].reset_index(drop=True)
-    supprimees = avant - len(df)
-    if supprimees:
-        print(f"  → Lignes sans aucune date supprimées : {supprimees}")
-    return df
-
-
-# ──────────────────────────────────────────────────────────────────────────────
 # 15. RAPPORT QUALITÉ FINAL
 # ──────────────────────────────────────────────────────────────────────────────
 
@@ -650,17 +524,9 @@ def run_etl(input_path: str, output_path: str) -> pd.DataFrame:
 
     # ── Imputations ──────────────────────────────────────────
     df = imputer_transit_time(df)
-    df = imputer_pays_destination(df)
     print(f"\n[5] Imputations : Transit_Time NaT={df['Transit_Time'].isna().sum()}")
 
-    # ── Recalculs dates manquantes ───────────────────────────
-    df = recalculer_eta_manquante(df)
-    df = recalculer_etd_manquante(df)
-    df = recalculer_atd_manquante(df)
-    df = recalculer_ata_manquante(df)
     df = calculer_transit_time_reel(df)
-    print(f"\n[6] Recalcul dates manquantes | "
-          f"NaT restants ETD={df['ETD'].isna().sum()} ATA={df['ATA'].isna().sum()}")
 
     # ── Corrections années ───────────────────────────────────
     df, log_ann = corriger_annee_erronnee(df)
@@ -672,8 +538,6 @@ def run_etl(input_path: str, output_path: str) -> pd.DataFrame:
     df = corriger_inversion_jour_mois(df)
     df = calculer_transit_time_reel(df)
 
-    # ── Suppression lignes sans dates ────────────────────────
-    df = supprimer_lignes_sans_dates(df)
     print(f"\n[9] Lignes restantes : {len(df)}")
 
 
@@ -701,12 +565,6 @@ def run_etl(input_path: str, output_path: str) -> pd.DataFrame:
     df = signaler_outliers(df)
     df = calculer_colonnes_derivees(df)
     df = calculer_year(df)
-    print(f"\n[12] Colonnes dérivées calculées")
-    print(f"    is_delayed=1 : {(df['is_delayed']==1).sum()}")
-    print(f"    Retard critique : {(df['niveau_retard']=='Retard critique').sum()}")
-    print(f"    Retard important : {(df['niveau_retard']=='Retard important').sum()}")
-    print(f"    Retard léger : {(df['niveau_retard']=='Retard léger').sum()}")
-    print(f"    À temps : {(df['niveau_retard']=='A temps').sum()}")
 
 
     # ── Sauvegarde ────────────────────────────────────────────

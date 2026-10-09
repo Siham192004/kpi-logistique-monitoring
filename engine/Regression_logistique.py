@@ -64,6 +64,7 @@ from sklearn.preprocessing import StandardScaler
 warnings.filterwarnings("ignore")
 logging.basicConfig(level=logging.INFO, format="%(levelname)s | %(message)s")
 logger = logging.getLogger(__name__)
+from sklearn.model_selection import cross_val_predict
 
 # ── Chemins ───────────────────────────────────────────────────────────────────
 DB_PATH    = Path("data/Logistique.db")
@@ -276,7 +277,7 @@ def tuner_hyperparametres(
         estimator=pipeline_base,
         param_distributions=espace_recherche,
         n_iter=n_iter,
-        scoring="f1_macro",
+        scoring="f1",
         cv=cv,
         random_state=42,
         n_jobs=-1,
@@ -287,7 +288,7 @@ def tuner_hyperparametres(
     print(f"\n=== TUNING HYPERPARAMÈTRES ({n_iter} combinaisons) ===")
     recherche.fit(X_train, y_train)
 
-    print(f"\nMeilleur F1 macro CV : {recherche.best_score_*100:.2f}%")
+    print(f"\nMeilleur F1 CV : {recherche.best_score_*100:.2f}%")
     print("Meilleurs paramètres :")
     for k, v in recherche.best_params_.items():
         print(f"  {k:40s} : {v}")
@@ -299,26 +300,20 @@ def tuner_hyperparametres(
 # SEUIL DE DÉCISION OPTIMAL
 # ═══════════════════════════════════════════════════════════════════════════
 
-def trouver_seuil_optimal(
-    pipeline: ImbPipeline,
-    X_train: pd.DataFrame,
-    y_train: pd.Series,
-) -> tuple:
-    probas = pipeline.predict_proba(X_train)[:, 1]
-    precisions, recalls, seuils = precision_recall_curve(y_train, probas)
+def trouver_seuil_optimal(pipeline, X_train, y_train):
+    cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+    probas_oof = cross_val_predict(
+        pipeline, X_train, y_train, cv=cv, method="predict_proba"
+    )[:, 1]
 
+    precisions, recalls, seuils = precision_recall_curve(y_train, probas_oof)
     f1s = np.where(
         (precisions + recalls) > 0,
         2 * precisions * recalls / (precisions + recalls),
         0,
     )
-    idx_optimal   = np.argmax(f1s[:-1])
-    seuil_optimal = float(seuils[idx_optimal])
-    f1_au_seuil   = float(f1s[idx_optimal])
-
-    print(f"\nSeuil optimal (F1 macro sur train) : {seuil_optimal:.3f}")
-    print(f"F1 macro au seuil optimal          : {f1_au_seuil*100:.2f}%")
-    return seuil_optimal, f1_au_seuil
+    idx = np.argmax(f1s[:-1])
+    return float(seuils[idx]), float(f1s[idx]), probas_oof
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -331,35 +326,34 @@ def evaluer_modele(
     X_test: pd.DataFrame,
     y_train: pd.Series,
     y_test: pd.Series,
+    probas_oof: np.ndarray,
     seuil: float = 0.50,
 ) -> dict:
+    print(f"\nSeuil de décision utilisé : {seuil:.3f}")
     # ── Performance train ─────────────────────────────────────────────────
     y_train_proba = pipeline.predict_proba(X_train)[:, 1]
     y_train_pred  = (y_train_proba >= seuil).astype(int)
 
     print("\n=== PERFORMANCE TRAIN ===")
     print(f"Accuracy train  : {accuracy_score(y_train, y_train_pred)*100:.2f}%")
-    print(f"F1 macro train  : {f1_score(y_train, y_train_pred, average='macro')*100:.2f}%")
+    print(f"F1 train        : {f1_score(y_train, y_train_pred, zero_division=0)*100:.2f}%")
     print(f"Log Loss train  : {log_loss(y_train, y_train_proba):.4f}")
 
     # ── Performance test ──────────────────────────────────────────────────
     y_pred_proba = pipeline.predict_proba(X_test)[:, 1]
     y_pred       = (y_pred_proba >= seuil).astype(int)
 
-    acc      = accuracy_score(y_test, y_pred)
-    f1_mac   = f1_score(y_test, y_pred, average="macro")
-    f1_ret   = f1_score(y_test, y_pred, pos_label=1, zero_division=0)
-    f1_heure = f1_score(y_test, y_pred, pos_label=0, zero_division=0)
-    prec     = precision_score(y_test, y_pred, zero_division=0)
-    rec      = recall_score(y_test, y_pred, zero_division=0)
-    ll       = log_loss(y_test, y_pred_proba)
-    jacc     = jaccard_score(y_test, y_pred, pos_label=1, zero_division=0)
+
+    acc  = accuracy_score(y_test, y_pred)
+    f1   = f1_score(y_test, y_pred, zero_division=0)
+    prec = precision_score(y_test, y_pred, zero_division=0)
+    rec  = recall_score(y_test, y_pred, zero_division=0)
+    ll   = log_loss(y_test, y_pred_proba)
+    jacc = jaccard_score(y_test, y_pred, zero_division=0)
 
     print("\n=== PERFORMANCE TEST ===")
     print(f"Accuracy          : {acc*100:.2f}%")
-    print(f"F1 macro          : {f1_mac*100:.2f}%")
-    print(f"F1 'En retard'    : {f1_ret*100:.2f}%")
-    print(f"F1 'À l'heure'   : {f1_heure*100:.2f}%")
+    print(f"F1 score          : {f1*100:.2f}%")
     print(f"Precision         : {prec*100:.2f}%")
     print(f"Recall            : {rec*100:.2f}%")
     print(f"Log Loss          : {ll:.4f}")
@@ -371,50 +365,22 @@ def evaluer_modele(
     print(f"  VN={cm[0][0]}  FP={cm[0][1]}  FN={cm[1][0]}  VP={cm[1][1]}")
     print(f"  → {cm[1][1]} retards détectés sur {cm[1][0]+cm[1][1]} réels")
 
-    print("\nRapport complet :")
-    print(classification_report(
-        y_test, y_pred,
-        target_names=["À l'heure", "En retard"]
-    ))
 
-    # ── Cross-validation ──────────────────────────────────────────────────
-    cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
-    scores_cv = cross_val_score(
-        pipeline, X_train, y_train,
-        cv=cv, scoring="f1_macro"
-    )
-    print(f"CV F1 macro (5 plis) : {scores_cv.mean()*100:.2f}%"
-          f" (+/- {scores_cv.std()*100:.2f}%)")
-    print(f"Écart CV/test        : {(scores_cv.mean()-f1_mac)*100:+.2f} pts")
-
-    if ll < 0.35:
-        print(f"\nLog Loss {ll:.4f} : Très bon — probabilités bien calibrées")
-    elif ll < 0.50:
-        print(f"\nLog Loss {ll:.4f} : Bon — probabilités acceptables")
-    else:
-        print(f"\nLog Loss {ll:.4f} : À améliorer")
-
-    if jacc > 0.50:
-        print(f"Jaccard {jacc:.4f}  : Bon — fort chevauchement prédictions/réalité")
-    elif jacc > 0.35:
-        print(f"Jaccard {jacc:.4f}  : Acceptable")
-    else:
-        print(f"Jaccard {jacc:.4f}  : Faible chevauchement")
+    y_oof = (probas_oof >= seuil).astype(int)
+    cv_f1 = f1_score(y_train, y_oof, zero_division=0)
+    print(f"CV F1 (out-of-fold, au seuil choisi) : {cv_f1*100:.2f}%")
+    print(f"Écart CV/test : {(cv_f1 - f1)*100:+.2f} pts")
 
     return {
-        "accuracy":      round(acc    * 100, 2),
-        "f1_macro":      round(f1_mac * 100, 2),
-        "f1_retard":     round(f1_ret * 100, 2),
-        "f1_heure":      round(f1_heure * 100, 2),
-        "precision":     round(prec   * 100, 2),
-        "recall":        round(rec    * 100, 2),
-        "log_loss":      round(ll,    4),
-        "jaccard":       round(jacc,  4),
-        "cv_f1_mean":    round(scores_cv.mean() * 100, 2),
-        "cv_f1_std":     round(scores_cv.std()  * 100, 2),
-        "ecart_cv_test": round((scores_cv.mean() - f1_mac) * 100, 2),
-    }
-
+    "accuracy":      round(acc * 100, 2),
+    "f1":            round(f1 * 100, 2),
+    "precision":     round(prec * 100, 2),
+    "recall":        round(rec * 100, 2),
+    "log_loss":      round(ll, 4),
+    "jaccard":       round(jacc, 4),
+    "cv_f1":         round(cv_f1 * 100, 2),
+    "ecart_cv_test": round((cv_f1 - f1) * 100, 2),
+}
 
 # ═══════════════════════════════════════════════════════════════════════════
 # IMPORTANCE DES FEATURES (COEFFICIENTS)
@@ -453,30 +419,18 @@ def afficher_importance_features(
 # ═══════════════════════════════════════════════════════════════════════════
 # SAUVEGARDE
 # ═══════════════════════════════════════════════════════════════════════════
-
-def sauvegarder_modele(
-    pipeline: ImbPipeline,
-    taux_global: float,
-    seuil_decision: float | None = None,  # conservé pour compatibilité, non utilisé
-) -> None:
-    """
-    Sauvegarde le pipeline et le taux global.
-    Le seuil de décision binaire n'est plus utilisé en production :
-    les niveaux de risque sont calculés directement depuis la probabilité brute.
-    Un seuil_decision=None est sauvegardé pour signaler ce changement.
-    """
+def sauvegarder_modele(pipeline, taux_global: float, seuil_decision: float) -> None:
     joblib.dump(
         {
             "pipeline":       pipeline,
-            "seuil_decision": None,   # obsolète — niveaux basés sur proba brute
+            "seuil_decision": seuil_decision,
             "taux_global":    taux_global,
         },
         MODEL_PATH,
     )
     print(f"\nModèle sauvegardé : {MODEL_PATH}")
-    print(f"  Taux global       : {taux_global*100:.2f}%")
-    print(f"  Niveaux de risque : basés sur probabilité brute (< 10% / < 25% / ≥ 25%)")
-    print(f"  TargetEncoder inclus dans le pipeline sauvegardé")
+    print(f"  Taux global     : {taux_global*100:.2f}%")
+    print(f"  Seuil décision  : {seuil_decision:.3f} (optimisé F1)")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -497,32 +451,12 @@ def charger_modele() -> tuple:
     )
 
 
-def _classifier_niveau_risque(probabilite: float) -> tuple[str, str]:
-    if probabilite < 0.30:
-        niveau_risque = "Faible"
-        label = "Risque faible"
-    elif probabilite < 0.639:
-        niveau_risque = "Modéré"
-        label = "Risque modéré"
-    else:
-        niveau_risque = "Élevé"
-        label = "Risque élevé"
-
-    return niveau_risque, label
-
 
 def predire_retard(nouveau_shipment: dict) -> dict:
     """
-    Prédit le risque de retard d'un shipment.
-
-    Le niveau de risque est déterminé par la probabilité brute du modèle,
-    sans seuil binaire fixe. Cette approche est plus robuste sur des données
-    déséquilibrées (10.6% de retards) et plus informative pour l'utilisateur.
-
-    Niveaux retournés :
-        Faible      (proba < 10%)  → en dessous du taux moyen historique
-        Modéré      (10% ≤ proba < 25%) → à surveiller
-        Élevé       (proba ≥ 25%) → action recommandée
+    Prédit si un shipment sera en retard.
+    Décision binaire : probabilité >= seuil optimal (maximisant le F1
+    sur la classe 'En retard', calculé en validation croisée).
     """
     pipeline, seuil_decision, taux_global = charger_modele()
 
@@ -559,19 +493,16 @@ def predire_retard(nouveau_shipment: dict) -> dict:
         "pays_destination":  nouveau_shipment.get("pays_destination")  or np.nan,
     }])
 
-    # ── Prédiction — probabilité brute ────────────────────────────────────
-    probabilite   = float(pipeline.predict_proba(X_nouveau)[0][1])
-    niveau_risque, label = _classifier_niveau_risque(probabilite)
+    probabilite = float(pipeline.predict_proba(X_nouveau)[0][1])
+    en_retard   = probabilite >= seuil_decision
 
     return {
         "probabilite_retard": round(probabilite * 100, 1),
-        "niveau_risque":      niveau_risque,
-        "label":              label,
-        # Conservé pour compatibilité avec le backend existant
-        "prediction":         1 if niveau_risque == "Élevé" else 0,
+        "seuil_decision":     round(seuil_decision * 100, 1),
+        "prediction":         int(en_retard),
+        "label":              "Retard probable" if en_retard else "À l'heure",
         "taux_global":        round(taux_global * 100, 1),
     }
-
 
 # ═══════════════════════════════════════════════════════════════════════════
 # POINT D'ENTRÉE
@@ -596,33 +527,28 @@ if __name__ == "__main__":
     )
 
     # 3. Seuil de décision optimal
-    seuil_optimal, _ = trouver_seuil_optimal(pipeline, X_train, y_train)
+    seuil_optimal, f1_cv, probas_oof = trouver_seuil_optimal(pipeline, X_train, y_train)
 
     # 4. Évaluation complète
     metriques = evaluer_modele(
-        pipeline, X_train, X_test, y_train, y_test,
-        seuil=seuil_optimal
-    )
+    pipeline, X_train, X_test, y_train, y_test,
+    probas_oof=probas_oof, seuil=seuil_optimal
+)
 
     # 5. Coefficients des features
     afficher_importance_features(pipeline, top_n=11)
 
     # 6. Sauvegarde (seuil_decision non utilisé en production)
-    sauvegarder_modele(pipeline, taux_global)
+    sauvegarder_modele(pipeline, taux_global, seuil_optimal)
 
     print("\n" + "=" * 65)
     print("  RÉSUMÉ FINAL")
     print(f"  Accuracy      : {metriques['accuracy']}%")
-    print(f"  F1 macro      : {metriques['f1_macro']}%")
-    print(f"  F1 En retard  : {metriques['f1_retard']}%")
-    print(f"  F1 À l'heure  : {metriques['f1_heure']}%")
+    print(f"  F1            : {metriques['f1']}%")
     print(f"  Precision     : {metriques['precision']}%")
     print(f"  Recall        : {metriques['recall']}%")
     print(f"  Log Loss      : {metriques['log_loss']}")
     print(f"  Jaccard Index : {metriques['jaccard']}")
-    print(f"  CV F1 macro   : {metriques['cv_f1_mean']}%"
-          f" (+/- {metriques['cv_f1_std']}%)")
-    print(f"  Écart CV/test : {metriques['ecart_cv_test']} pts")
     print("=" * 65)
 
     # 7. Tests de prédiction — cas métier représentatifs
@@ -722,16 +648,12 @@ if __name__ == "__main__":
           "port_dechargement": None, "pays_destination": None}),
     ]
 
-    print(f"\n{'─'*78}")
-    print(f"{'Cas':<45} {'Proba':>6}  {'Risque':<10}  {'Label'}")
-    print(f"{'─'*78}")
+    print(f"\n{'─'*70}")
+    print(f"{'Cas':<48} {'Proba':>6}  {'Décision'}")
+    print(f"{'─'*70}")
     for nom, data in exemples:
-        r = predire_retard(data)
-        print(f"{nom:<45} {r['probabilite_retard']:>5.1f}%"
-              f"  {r['niveau_risque']:<10}  {r['label']}")
-    print(f"{'─'*78}")
-    print(f"\nTaux historique de retard dans le dataset : 10.6%")
-    print(f"\nSeuils de classification (basés sur le taux historique) :")
-    print(f"  Faible    : probabilité <  5%  → bien en dessous du taux moyen")
-    print(f"  Modéré    : probabilité  5–10% → autour du taux moyen, à surveiller")
-    print(f"  Élevé     : probabilité ≥ 10%  → dépasse le taux moyen, action requise")
+      r = predire_retard(data)
+      print(f"{nom:<48} {r['probabilite_retard']:>5.1f}%  {r['label']}")
+    print(f"{'─'*70}")
+    print(f"\nSeuil de décision : {seuil_optimal*100:.1f}% (optimisé F1)")
+    print(f"Taux historique de retard : {taux_global*100:.1f}%")

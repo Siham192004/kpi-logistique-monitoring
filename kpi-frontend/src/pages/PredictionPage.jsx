@@ -10,14 +10,14 @@ import { Brain, AlertTriangle, CheckCircle, X } from 'lucide-react'
 import toast from 'react-hot-toast'
 import styles from './PredictionPage.module.css'
 
-const RISK_COLORS = {
-  Faible: { variant: 'success', color: 'var(--color-success)', barColor: 'var(--color-success)' },
-  Modéré: { variant: 'warning', color: 'var(--color-warning)', barColor: 'var(--color-warning)' },
-  Élevé:  { variant: 'critical', color: 'var(--color-danger)',  barColor: 'var(--color-danger)'  },
+// Décision binaire du modèle : 1 = retard probable (proba >= seuil), 0 = à l'heure
+const DECISION_STYLES = {
+  1: { variant: 'critical', color: 'var(--color-danger)',  barColor: 'var(--color-danger)'  },
+  0: { variant: 'success',  color: 'var(--color-success)', barColor: 'var(--color-success)' },
 }
 
-const ProbabilityBar = ({ value, niveau }) => {
-  const barColor = RISK_COLORS[niveau]?.barColor || 'var(--color-success)'
+const ProbabilityBar = ({ value, prediction }) => {
+  const barColor = DECISION_STYLES[prediction]?.barColor || 'var(--color-success)'
   return (
     <div className={styles.probBar}>
       <div className={styles.probFill} style={{ width: `${value}%`, background: barColor }} />
@@ -63,7 +63,7 @@ export const PredictionPage = () => {
   }
 
   const showPanel = result || predicting
-  const riskStyle = result ? RISK_COLORS[result.niveau_risque] || RISK_COLORS.Moyen : null
+  const riskStyle = result ? DECISION_STYLES[result.prediction] || DECISION_STYLES[0] : null
 
   const columns = [
     { key: 'id', label: '#', render: v => <span className={styles.monoId}>#{v}</span> },
@@ -94,7 +94,7 @@ export const PredictionPage = () => {
     <AppLayout>
       <Header
         title="Prédiction ML"
-        subtitle="Modèle de régression logistique — risque de retard"
+        subtitle="Modèle de régression logistique — retard probable ou à l'heure"
       />
 
       <div className={styles.content} ref={contentRef}>
@@ -157,15 +157,15 @@ export const PredictionPage = () => {
     className={styles.verdictIcon}
     style={{ background: riskStyle?.color + '22' }}
   >
-    {result.niveau_risque === 'Élevé'
+    {result.prediction === 1
       ? <AlertTriangle size={26} color={riskStyle?.color} />
       : <CheckCircle size={26} color={riskStyle?.color} />
     }
   </div>
   <div>
-    <p className={styles.verdictLabel}>{result.niveau_risque} risque</p>
+    <p className={styles.verdictLabel}>{result.label}</p>
     <Badge variant={riskStyle?.variant} dot>
-      {result.probabilite_retard?.toFixed(1)}% de probabilité
+      Score du modèle : {result.probabilite_retard?.toFixed(1)}%
     </Badge>
   </div>
 </div>
@@ -173,12 +173,17 @@ export const PredictionPage = () => {
                 {/* Probability */}
                 <div className={styles.probSection}>
                   <div className={styles.probHeader}>
-                    <span className={styles.probLabel}>Probabilité de retard</span>
+                    <span className={styles.probLabel}>Score de retard</span>
                     <span className={styles.probPercent} style={{ color: riskStyle?.color }}>
                       {result.probabilite_retard?.toFixed(1)}%
                     </span>
                   </div>
-                  <ProbabilityBar value={result.probabilite_retard} niveau={result.niveau_risque} />
+                  <ProbabilityBar value={result.probabilite_retard} prediction={result.prediction} />
+                  {result.seuil_decision != null && (
+                    <p className={styles.contextLabel} style={{ marginTop: '6px' }}>
+                      Seuil de décision : {result.seuil_decision.toFixed(1)}% — au-dessus, le modèle annonce un retard
+                    </p>
+                  )}
                 </div>
 
                 {/* Only NEW info not already in the table */}

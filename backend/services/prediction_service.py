@@ -112,7 +112,7 @@ def predire_retard_shipment(
         # Résultat ML
         prediction=resultat["prediction"],
         probabilite_retard=resultat["probabilite_retard"],
-        niveau_risque=resultat["niveau_risque"],
+        seuil_decision=resultat["seuil_decision"],
         label=resultat["label"],
         meteo=None,
     )
