@@ -116,7 +116,7 @@ ws = new WebSocket(
         </div>
         {!collapsed && (
           <div className={styles.logoText}>
-            <span className={styles.logoName}>Operation Logistic Performance System (OLPS)</span>
+            <span className={styles.logoName}>OLP System</span>
             <span className={styles.logoSub}>Maritime Logistics</span>
           </div>
         )}

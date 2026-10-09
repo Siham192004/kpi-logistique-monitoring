@@ -38,10 +38,10 @@ export const SplashScreen = ({ onDone }) => {
 
         {/* Name */}
         <div className={styles.appName}>
-          <span className={styles.appNameKpi}>KPI</span>
-          <span className={styles.appNamePlatform}>Platform</span>
+          <span className={styles.appNameKpi}>OLP</span>
+          <span className={styles.appNamePlatform}>System</span>
         </div>
-        <p className={styles.tagline}>Maritime Logistics Intelligence</p>
+        <p className={styles.tagline}>Operation Logistic Platform </p>
 
         {/* Ship animation */}
         <div className={styles.shipTrack}>
