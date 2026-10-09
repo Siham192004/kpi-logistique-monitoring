@@ -12,12 +12,6 @@ class ShipmentStatusEnum(str, Enum):
     cancelled = "Cancelled"
 
 
-class TypeAnnulationEnum(str, Enum):
-    non_annule   = "Non annulé"
-    avant_depart = "Avant départ"
-    apres_depart = "Après départ"
-
-
 class IncotermEnum(str, Enum):
     cif = "CIF"
     fob = "FOB"
@@ -99,8 +93,6 @@ class ShipmentCreateSchema(BaseModel):
                 raise ValueError("ATD doit être strictement antérieure à ATA.")
             if self.charged_volume is not None and self.charged_volume <= 0:
                 raise ValueError("Charged Volume doit être supérieur à 0.")
-            if self.type_annulation != TypeAnnulationEnum.non_annule:
-                raise ValueError("Type annulation doit être 'Non annulé' pour un shipment Normal.")
 
         if (self.port_chargement and self.port_dechargement and
                 self.port_chargement.strip().lower() == self.port_dechargement.strip().lower()):
@@ -198,7 +190,6 @@ class ShipmentResponseSchema(BaseModel):
     port_dechargement:             str
     pays_destination:              str
     shipment_status:               str
-    type_annulation:               str
     etd:                           Optional[date]  = None
     atd:                           Optional[date]  = None
     eta:                           Optional[date]  = None

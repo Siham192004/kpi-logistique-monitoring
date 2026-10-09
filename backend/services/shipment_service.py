@@ -302,7 +302,6 @@ def creer_shipment(db: Session, data: ShipmentCreateSchema, createur_id: int) ->
     # ✅ Après
     if data.incoterm:
        data_dict["incoterm"] = data.incoterm.value
-# type_annulation n'est plus dans le schema, on le calcule directement
 
 # 3. Colonnes dérivées
     if data.shipment_status.value == "Normal":
@@ -360,7 +359,7 @@ def modifier_shipment(db: Session, shipment_id: int, data: ShipmentUpdateSchema,
     donnees_finales = {**existant, **data_dict}
 
     # Convertir enums en string
-    for champ in ["shipment_status", "type_annulation", "incoterm"]:
+    for champ in ["shipment_status", "incoterm"]:
         val = donnees_finales.get(champ)
         if val and hasattr(val, "value"):
             donnees_finales[champ] = val.value

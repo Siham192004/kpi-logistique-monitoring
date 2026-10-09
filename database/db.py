@@ -81,7 +81,6 @@ class Shipment(Base):
     month                         = Column(String)
     year                          = Column(Integer)
     shipment_status               = Column(String, nullable=False, default="Normal")
-    type_annulation               = Column(String, nullable=False, default="Non annulé")
     transit_time_reel             = Column(Float)
     eta_deviation                 = Column(Float)
     etd_deviation                 = Column(Float)
@@ -268,7 +267,6 @@ def charger_donnees_historiques(filepath: str = "data/maritime_dataset_nettoye.x
     "Month":                        "month",
     "Year":                         "year",
     "shipment_status":              "shipment_status",
-    "type_annulation":              "type_annulation",
     "Transit_Time_Reel":            "transit_time_reel",
     "eta_deviation":                "eta_deviation",
     "etd_deviation":                "etd_deviation",

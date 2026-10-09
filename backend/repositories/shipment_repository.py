@@ -33,7 +33,6 @@ def _shipment_to_dict(s: Shipment) -> dict:
         "month":                        s.month,
         "year":                         s.year,
         "shipment_status":              s.shipment_status,
-        "type_annulation":              s.type_annulation,
         "transit_time_reel":            s.transit_time_reel,
         "eta_deviation":                s.eta_deviation,
         "etd_deviation":                s.etd_deviation,

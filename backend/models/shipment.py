@@ -85,7 +85,6 @@ class Shipment(Base):
     month:                         Mapped[Optional[str]]   = mapped_column(String)
     year:                          Mapped[Optional[int]]   = mapped_column(Integer)
     shipment_status:               Mapped[str]             = mapped_column(String, nullable=False, default="Normal")
-    type_annulation:               Mapped[str]             = mapped_column(String, nullable=False, default="Non annulé")
     transit_time_reel:             Mapped[Optional[float]] = mapped_column(Float)
     eta_deviation:                 Mapped[Optional[float]] = mapped_column(Float)
     etd_deviation:                 Mapped[Optional[float]] = mapped_column(Float)

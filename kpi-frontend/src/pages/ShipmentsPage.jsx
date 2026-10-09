@@ -504,7 +504,6 @@ const handleExportExcel = async () => {
               ['Transit time', detailTarget.transit_time != null ? `${detailTarget.transit_time} j` : null],
               ['Incoterm',        detailTarget.incoterm],
               ['Fréquence',       detailTarget.frequency],
-              ['Type annulation', detailTarget.type_annulation],
               ['ATD', detailTarget.atd ? new Date(detailTarget.atd).toLocaleDateString('fr-FR') : null],
               ['ATA', detailTarget.ata ? new Date(detailTarget.ata).toLocaleDateString('fr-FR') : null],
             ].map(([label, value]) => (
